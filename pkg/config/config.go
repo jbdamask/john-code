@@ -6,7 +6,8 @@ import (
 )
 
 type Config struct {
-    APIKey string
+    APIKey  string
+    BaseURL string
 }
 
 func Load() (*Config, error) {
@@ -14,8 +15,11 @@ func Load() (*Config, error) {
     if apiKey == "" {
         return nil, fmt.Errorf("ANTHROPIC_API_KEY environment variable is not set")
     }
+    
+    baseURL := os.Getenv("ANTHROPIC_BASE_URL")
 
 	return &Config{
-        APIKey: apiKey,
+        APIKey:  apiKey,
+        BaseURL: baseURL,
     }, nil
 }

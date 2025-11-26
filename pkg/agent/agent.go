@@ -89,7 +89,7 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
     // Use real client if configured
     var client llm.Client
     if cfg.APIKey != "dummy" && cfg.APIKey != "" {
-        client = llm.NewAnthropicClient(cfg.APIKey)
+        client = llm.NewAnthropicClient(cfg.APIKey, cfg.BaseURL)
     } else {
         client = llm.NewMockClient()
     }
