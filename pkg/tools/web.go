@@ -17,12 +17,16 @@ import (
 // WebSearchTool
 type WebSearchTool struct {
     apiKey string
+    client *http.Client
+    baseURL string
 }
 
 func NewWebSearchTool() *WebSearchTool {
     // Using Brave Search as the backend
     return &WebSearchTool{
         apiKey: os.Getenv("BRAVE_API_KEY"),
+        client: &http.Client{Timeout: 10 * time.Second},
+        baseURL: "https://api.search.brave.com/res/v1/web/search",
     }
 }
 
@@ -64,8 +68,7 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
     }
 
     // Call Brave Search API
-    endpoint := "https://api.search.brave.com/res/v1/web/search"
-    u, _ := url.Parse(endpoint)
+    u, _ := url.Parse(t.baseURL)
     q := u.Query()
     q.Set("q", query)
     u.RawQuery = q.Encode()
@@ -74,8 +77,7 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
     req.Header.Set("X-Subscription-Token", t.apiKey)
     req.Header.Set("Accept", "application/json")
 
-    client := &http.Client{Timeout: 10 * time.Second}
-    resp, err := client.Do(req)
+    resp, err := t.client.Do(req)
     if err != nil {
         return "", fmt.Errorf("search request failed: %w", err)
     }
@@ -102,7 +104,15 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
 }
 
 // WebFetchTool
-type WebFetchTool struct {}
+type WebFetchTool struct {
+    client *http.Client
+}
+
+func NewWebFetchTool() *WebFetchTool {
+    return &WebFetchTool{
+        client: &http.Client{Timeout: 15 * time.Second},
+    }
+}
 
 func (t *WebFetchTool) Definition() ToolDefinition {
     return ToolDefinition{
@@ -128,11 +138,10 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{})
     }
 
     // Basic GET request
-    client := &http.Client{Timeout: 15 * time.Second}
     req, _ := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
     req.Header.Set("User-Agent", "JohnCode/1.0")
     
-    resp, err := client.Do(req)
+    resp, err := t.client.Do(req)
     if err != nil {
         return "", fmt.Errorf("fetch failed: %w", err)
     }

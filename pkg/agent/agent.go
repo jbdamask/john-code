@@ -30,7 +30,7 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
     registry.Register(&tools.GrepTool{})
     
     registry.Register(tools.NewWebSearchTool())
-    registry.Register(&tools.WebFetchTool{})
+    registry.Register(tools.NewWebFetchTool())
     registry.Register(tools.NewAskUserQuestionTool(ui))
     registry.Register(&tools.NotebookEditTool{})
     registry.Register(&tools.BashOutputTool{})
