@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+    "strings"
 	"testing"
 )
 
@@ -69,4 +70,27 @@ func TestFSTools(t *testing.T) {
 	if string(content) != "Hello, World!\nLine Two" {
 		t.Errorf("EditTool failed. Got content: %s", string(content))
 	}
+
+    // 4. Test GlobTool
+    globTool := &GlobTool{}
+    // Create nested structure
+    os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755)
+    os.WriteFile(filepath.Join(tmpDir, "subdir", "match.go"), []byte("package main"), 0644)
+    os.WriteFile(filepath.Join(tmpDir, "subdir", "ignore.txt"), []byte("text"), 0644)
+    
+    globArgs := map[string]interface{}{
+        "pattern": filepath.Join(tmpDir, "subdir", "*.go"),
+    }
+    
+    globOut, err := globTool.Execute(ctx, globArgs)
+    if err != nil {
+        t.Fatalf("GlobTool failed: %v", err)
+    }
+    
+    if !strings.Contains(globOut, "match.go") {
+        t.Errorf("Glob failed to find match.go. Got: %s", globOut)
+    }
+    if strings.Contains(globOut, "ignore.txt") {
+         t.Errorf("Glob found ignore.txt but shouldn't have. Got: %s", globOut)
+    }
 }

@@ -3,16 +3,19 @@ package tools
 import (
 	"context"
 	"fmt"
-
-	"github.com/jbdamask/john-code/pkg/ui"
 )
+
+type UserPrompter interface {
+    Print(string)
+    Prompt(string) string
+}
 
 // AskUserQuestionTool
 type AskUserQuestionTool struct {
-    ui *ui.UI
+    ui UserPrompter
 }
 
-func NewAskUserQuestionTool(ui *ui.UI) *AskUserQuestionTool {
+func NewAskUserQuestionTool(ui UserPrompter) *AskUserQuestionTool {
     return &AskUserQuestionTool{ui: ui}
 }
 
