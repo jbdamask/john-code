@@ -3,20 +3,23 @@ package agent
 import (
 	"context"
 	"fmt"
+    "os"
     "strings"
 
 	"github.com/jbdamask/john-code/pkg/config"
+	"github.com/jbdamask/john-code/pkg/history"
 	"github.com/jbdamask/john-code/pkg/llm"
 	"github.com/jbdamask/john-code/pkg/tools"
 	"github.com/jbdamask/john-code/pkg/ui"
 )
 
 type Agent struct {
-	cfg    *config.Config
-	ui     *ui.UI
-	tools  *tools.Registry
-	client llm.Client
+	cfg     *config.Config
+	ui      *ui.UI
+	tools   *tools.Registry
+	client  llm.Client
 	history []llm.Message
+    session *history.SessionManager
 }
 
 func New(cfg *config.Config, ui *ui.UI) *Agent {
@@ -91,11 +94,24 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
         client = llm.NewMockClient()
     }
 
+    // Initialize Session Manager
+    // We need CWD
+    // Since we use NewBashTool which gets CWD, we should match.
+    // But NewBashTool is internal.
+    // Let's just use "." and let SessionManager expand it.
+    // Actually SessionManager does string replacement, so we should get absolute path.
+    
+    // We'll initialize it in New, logging error if fails but not crashing?
+    
+    // We can't get error from New easily without changing signature.
+    // Let's assume we can get CWD.
+    
 	return &Agent{
 		cfg:    cfg,
 		ui:     ui,
 		tools:  registry,
 		client: client,
+        session: nil, // Will init in Run
 		history: []llm.Message{
             {
                 Role: llm.RoleSystem,
@@ -107,6 +123,17 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
 
 func (a *Agent) Run() error {
 	a.ui.Print("John Code initialized. Type 'exit' or 'quit' to stop.")
+
+    cwd, err := os.Getwd()
+    if err == nil {
+        sm, err := history.NewSessionManager(cwd)
+        if err != nil {
+            a.ui.Print(fmt.Sprintf("Warning: Failed to initialize session manager: %v", err))
+        } else {
+            a.session = sm
+            a.ui.Print(fmt.Sprintf("Session ID: %s", sm.SessionID))
+        }
+    }
 
 	for {
 		input := a.ui.Prompt("> ")
@@ -140,11 +167,18 @@ func (a *Agent) Run() error {
         cleanInput = strings.TrimSpace(cleanInput)
 
 		// Add user message to history
-		a.history = append(a.history, llm.Message{
+        userMsg := llm.Message{
 			Role:    llm.RoleUser,
 			Content: cleanInput,
             Images:  images,
-		})
+		}
+		a.history = append(a.history, userMsg)
+        
+        if a.session != nil {
+            if err := a.session.Append(llm.RoleUser, userMsg); err != nil {
+                a.ui.Print(fmt.Sprintf("Warning: Failed to log user message: %v", err))
+            }
+        }
 
 		// Run the LLM loop (handling tool calls)
 		if err := a.processTurn(); err != nil {
@@ -211,6 +245,11 @@ func (a *Agent) processTurn() error {
         }
 
         a.history = append(a.history, *resp)
+        if a.session != nil {
+            if err := a.session.Append(llm.RoleAssistant, *resp); err != nil {
+                a.ui.Print(fmt.Sprintf("Warning: Failed to log assistant message: %v", err))
+            }
+        }
 
         // If no tool calls, we're done with this turn (waiting for user input)
         if len(resp.ToolCalls) == 0 {
@@ -243,6 +282,12 @@ func (a *Agent) processTurn() error {
                 },
             }
             a.history = append(a.history, toolMsg)
+            
+            if a.session != nil {
+                if err := a.session.Append(llm.RoleTool, toolMsg); err != nil {
+                    a.ui.Print(fmt.Sprintf("Warning: Failed to log tool result: %v", err))
+                }
+            }
         }
         // Loop continues to send tool results back to LLM
     }
