@@ -34,7 +34,19 @@ func NewTodoWriteTool() *TodoWriteTool {
 func (t *TodoWriteTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "TodoWrite",
-		Description: "Create and manage structured task lists.",
+		Description: `Create and manage structured task lists.
+- Complex multi-step tasks (3+ distinct steps)
+- Non-trivial and complex tasks
+- User explicitly requests todo list
+- User provides multiple tasks
+- After receiving new instructions
+- When starting work on a task (mark as in_progress BEFORE beginning)
+- After completing a task (mark as completed immediately)
+- Tasks must have two forms: content (imperative, e.g., "Run tests") and activeForm (present continuous, e.g., "Running tests")
+- Update status in real-time
+- Mark complete IMMEDIATELY after finishing (don't batch)
+- Exactly ONE task must be in_progress at any time
+- Complete current tasks before starting new ones`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -50,6 +62,7 @@ func (t *TodoWriteTool) Definition() ToolDefinition {
 						},
 						"required": []string{"id", "content", "status"},
 					},
+                    "description": "The list of todo items. This replaces any existing todos.",
 				},
 			},
 			"required": []string{"todos"},

@@ -19,7 +19,10 @@ func NewTaskTool(runner TaskRunner) *TaskTool {
 func (t *TaskTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "Task",
-		Description: "Delegate a complex task to a sub-agent.",
+		Description: `Delegate a complex task to a sub-agent.
+- Use when you need to perform complex multi-step tasks
+- Use when you need to run an operation that will produce a lot of output (tokens) that is not needed after the sub-agent's task completes
+- When the agent is done, it will return a single message back to you.`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{

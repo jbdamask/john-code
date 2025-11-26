@@ -14,26 +14,36 @@ type NotebookEditTool struct {}
 func (t *NotebookEditTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "NotebookEdit",
-		Description: "Edits a Jupyter notebook cell.",
+		Description: `Completely replaces contents of specific cell in Jupyter notebook.
+- Must use absolute path
+- Cell number is 0-indexed
+- Use edit_mode=insert to add new cell
+- Use edit_mode=delete to delete cell
+- Can specify cell_type (code or markdown)`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"notebook_path": map[string]interface{}{
 					"type": "string",
+                    "description": "The absolute path to the notebook file",
 				},
                 "cell_number": map[string]interface{}{
                     "type": "integer",
+                    "description": "The 0-indexed cell number to edit",
                 },
                 "new_source": map[string]interface{}{
                     "type": "string",
+                    "description": "The new content for the cell",
                 },
                 "edit_mode": map[string]interface{}{
                     "type": "string",
                     "enum": []string{"replace", "insert", "delete"},
+                    "description": "The edit mode: replace (default), insert, or delete",
                 },
                 "cell_type": map[string]interface{}{
                     "type": "string",
                     "enum": []string{"code", "markdown"},
+                    "description": "The type of cell: code (default) or markdown",
                 },
 			},
 			"required": []string{"notebook_path", "cell_number"},

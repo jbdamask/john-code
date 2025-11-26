@@ -11,12 +11,19 @@ type BashOutputTool struct{}
 func (t *BashOutputTool) Definition() ToolDefinition {
     return ToolDefinition{
         Name: "BashOutput",
-        Description: "Retrieve output from a background bash process.",
+        Description: `Retrieves output from a running or completed background bash shell
+- Takes a shell_id parameter identifying the shell
+- Always returns only new output since the last check
+- Returns stdout and stderr output along with shell status
+- Supports optional regex filtering to show only lines matching a pattern
+- Use this tool when you need to monitor or check the output of a long-running shell
+- Shell IDs can be found using the /tasks command`,
         Schema: map[string]interface{}{
             "type": "object",
             "properties": map[string]interface{}{
                 "shell_id": map[string]interface{}{
                     "type": "string",
+                    "description": "The ID of the background shell to retrieve output from",
                 },
             },
             "required": []string{"shell_id"},
@@ -49,12 +56,17 @@ type KillShellTool struct{}
 func (t *KillShellTool) Definition() ToolDefinition {
     return ToolDefinition{
         Name: "KillShell",
-        Description: "Kill a background bash process.",
+        Description: `Kills a running background bash shell by its ID
+- Takes a shell_id parameter identifying the shell to kill
+- Returns a success or failure status 
+- Use this tool when you need to terminate a long-running shell
+- Shell IDs can be found using the /tasks command`,
         Schema: map[string]interface{}{
             "type": "object",
             "properties": map[string]interface{}{
                 "shell_id": map[string]interface{}{
                     "type": "string",
+                    "description": "The ID of the background shell to kill",
                 },
             },
             "required": []string{"shell_id"},

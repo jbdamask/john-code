@@ -33,7 +33,9 @@ func NewWebSearchTool() *WebSearchTool {
 func (t *WebSearchTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "WebSearch",
-		Description: "Search the web for current information.",
+		Description: `Search the web for up-to-date information.
+- Provides current events and recent data beyond knowledge cutoff
+- Domain filtering supported (allowed/blocked domains)`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -117,7 +119,12 @@ func NewWebFetchTool() *WebFetchTool {
 func (t *WebFetchTool) Definition() ToolDefinition {
     return ToolDefinition{
         Name: "WebFetch",
-        Description: "Fetches content from a URL and returns it as markdown.",
+        Description: `Fetches content from URL and processes with AI model.
+- Must be fully-formed valid URL
+- HTTP URLs auto-upgraded to HTTPS
+- Read-only, doesn't modify files
+- Results may be summarized if very large
+- When URL redirects to different host, make new WebFetch request with redirect URL`,
         Schema: map[string]interface{}{
             "type": "object",
             "properties": map[string]interface{}{
