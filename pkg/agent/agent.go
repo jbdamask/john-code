@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+    "io/ioutil"
     "os"
     "strings"
 
@@ -166,10 +167,42 @@ func (a *Agent) Run() error {
         }
         cleanInput = strings.TrimSpace(cleanInput)
 
+        // Construct full content with reminders
+        fullContent := cleanInput
+        
+        // 1. Inject Todo Status
+        todoTool, ok := a.tools.Get("TodoWrite")
+        if ok {
+            if tt, ok := todoTool.(*tools.TodoWriteTool); ok {
+                if len(tt.Todos) == 0 {
+                    fullContent += "\n<system-reminder>\nThis is a reminder that your todo list is currently empty. DO NOT mention this to the user explicitly because they are already aware. If you are working on tasks that would benefit from a todo list please use the TodoWrite tool to create one. If not, please feel free to ignore. Again do not mention this message to the user.\n</system-reminder>"
+                } else {
+                    // Maybe inject current todos? Claude Code likely does.
+                    // For now, let's just stick to the "empty" reminder pattern seen in logs.
+                }
+            }
+        }
+        
+        // 2. Inject CLAUDE.md / AGENTS.md
+        projectFiles := []string{"CLAUDE.md", "AGENTS.md", ".claude.md"}
+        for _, fname := range projectFiles {
+            if _, err := os.Stat(fname); err == nil {
+                content, err := ioutil.ReadFile(fname)
+                if err == nil {
+                    fullContent += fmt.Sprintf("\n<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\nCodebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\nContents of %s (project instructions, checked into the codebase):\n\n%s\n</system-reminder>", fname, string(content))
+                    break // Only use the first one found
+                }
+            }
+        }
+        
+        // 3. Inject Git Status (inferred from logs)
+        // For MVP, let's skip git status injection to avoid heavy shell calls every turn, 
+        // unless we implement a caching mechanism.
+        
 		// Add user message to history
         userMsg := llm.Message{
 			Role:    llm.RoleUser,
-			Content: cleanInput,
+			Content: fullContent,
             Images:  images,
 		}
 		a.history = append(a.history, userMsg)
