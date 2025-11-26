@@ -14,18 +14,38 @@ import (
 	"strings"
 )
 
-const AnthropicEndpoint = "https://api.anthropic.com/v1/messages"
+const DefaultAnthropicEndpoint = "https://api.anthropic.com/v1/messages"
 const Model = "claude-sonnet-4-5-20250929"
 
 type AnthropicClient struct {
-	apiKey string
-	client *http.Client
+	apiKey   string
+	endpoint string
+	client   *http.Client
 }
 
-func NewAnthropicClient(apiKey string) *AnthropicClient {
+func NewAnthropicClient(apiKey string, baseURL string) *AnthropicClient {
+    endpoint := DefaultAnthropicEndpoint
+    if baseURL != "" {
+        // Construct endpoint from baseURL
+        // If baseURL ends with /, remove it
+        baseURL = strings.TrimSuffix(baseURL, "/")
+        // If baseURL doesn't end with /v1/messages, append it? 
+        // Usually users provide the base e.g. https://api.anthropic.com
+        // But for flexibility, if they provide full path, use it?
+        // Let's assume they provide base.
+        
+        // Simple heuristic: if it contains "messages", trust it.
+        if strings.Contains(baseURL, "/messages") {
+            endpoint = baseURL
+        } else {
+            endpoint = baseURL + "/v1/messages"
+        }
+    }
+
 	return &AnthropicClient{
-		apiKey: apiKey,
-		client: &http.Client{},
+		apiKey:   apiKey,
+		endpoint: endpoint,
+		client:   &http.Client{},
 	}
 }
 
@@ -200,7 +220,7 @@ func (c *AnthropicClient) GenerateStream(ctx context.Context, messages []Message
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", AnthropicEndpoint, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
