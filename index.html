@@ -3,581 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mandelbrot Set & Gaming Champions</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background: #000;
-            color: #0f0;
-            overflow: hidden;
-            display: flex;
-            height: 100vh;
-        }
-
-        .container {
-            display: flex;
-            width: 100%;
-            height: 100%;
-        }
-
-        .mandelbrot-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #000 0%, #1a0033 100%);
-            padding: 20px;
-            position: relative;
-        }
-
-        .mandelbrot-section h1 {
-            position: absolute;
-            top: 20px;
-            font-size: 2.5em;
-            text-shadow: 0 0 10px #0f0, 0 0 20px #0f0;
-            color: #0f0;
-        }
-
-        #mandelbrotCanvas {
-            border: 3px solid #0f0;
-            box-shadow: 0 0 20px #0f0, 0 0 40px #0f0;
-            background: #000;
-        }
-
-        .champions-section {
-            width: 400px;
-            background: #000;
-            border-left: 3px solid #0f0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .champions-header {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 3px solid #0f0;
-            background: #001a00;
-        }
-
-        .champions-header h2 {
-            font-size: 1.8em;
-            text-shadow: 0 0 10px #0f0;
-            margin-bottom: 10px;
-        }
-
-        .champions-header p {
-            font-size: 0.9em;
-            color: #0a0;
-        }
-
-        .champions-scroll {
-            flex: 1;
-            overflow: hidden;
-            position: relative;
-            padding: 20px;
-        }
-
-        .champions-list {
-            animation: scroll 60s linear infinite;
-        }
-
-        @keyframes scroll {
-            0% {
-                transform: translateY(0);
-            }
-            100% {
-                transform: translateY(-100%);
-            }
-        }
-
-        .champion-card {
-            background: #001a00;
-            border: 2px solid #0f0;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
-            transition: all 0.3s;
-        }
-
-        .champion-card:hover {
-            background: #003300;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.6);
-            transform: scale(1.05);
-        }
-
-        .champion-card h3 {
-            font-size: 1.3em;
-            margin-bottom: 8px;
-            color: #0ff;
-            text-shadow: 0 0 5px #0ff;
-        }
-
-        .champion-card .game {
-            font-size: 1.1em;
-            color: #0f0;
-            margin-bottom: 5px;
-        }
-
-        .champion-card .achievement {
-            font-size: 0.9em;
-            color: #0a0;
-            margin-bottom: 5px;
-        }
-
-        .champion-card .year {
-            font-size: 0.85em;
-            color: #0f0;
-            font-style: italic;
-        }
-
-        .controls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 26, 0, 0.9);
-            padding: 10px 20px;
-            border: 2px solid #0f0;
-            border-radius: 5px;
-        }
-
-        .controls button {
-            background: #001a00;
-            color: #0f0;
-            border: 2px solid #0f0;
-            padding: 8px 15px;
-            margin: 0 5px;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            border-radius: 3px;
-            transition: all 0.3s;
-        }
-
-        .controls button:hover {
-            background: #003300;
-            box-shadow: 0 0 10px #0f0;
-        }
-
-        @media (max-width: 1024px) {
-            .container {
-                flex-direction: column;
-            }
-
-            .champions-section {
-                width: 100%;
-                height: 300px;
-                border-left: none;
-                border-top: 3px solid #0f0;
-            }
-
-            .mandelbrot-section h1 {
-                font-size: 1.8em;
-            }
-        }
-    </style>
+    <title>ISS Tracker - Live Location</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <div class="mandelbrot-section">
-            <h1>MANDELBROT SET</h1>
-            <canvas id="mandelbrotCanvas"></canvas>
-            <div class="controls">
-                <button onclick="resetZoom()">Reset</button>
-                <button onclick="toggleAnimation()">Pause/Play</button>
-                <button onclick="changeColors()">Change Colors</button>
-            </div>
-        </div>
+        <header>
+            <h1>🛰️ International Space Station Tracker</h1>
+            <p class="subtitle">Real-time location and tracking</p>
+        </header>
 
-        <div class="champions-section">
-            <div class="champions-header">
-                <h2>GAMING LEGENDS</h2>
-                <p>Champions of the 80s & 90s</p>
-            </div>
-            <div class="champions-scroll">
-                <div class="champions-list" id="championsList">
-                    <!-- Champions will be dynamically added here -->
+        <div class="content">
+            <div id="map"></div>
+            
+            <div class="info-panel">
+                <div class="info-section">
+                    <h2>Current Position</h2>
+                    <div class="stat-grid">
+                        <div class="stat">
+                            <span class="label">Latitude:</span>
+                            <span id="latitude" class="value">--</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Longitude:</span>
+                            <span id="longitude" class="value">--</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Altitude:</span>
+                            <span id="altitude" class="value">~408 km</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Velocity:</span>
+                            <span id="velocity" class="value">~27,600 km/h</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h2>Next Visible Passes</h2>
+                    <button id="getPassesBtn" class="btn">Get Passes for My Location</button>
+                    <div id="passes" class="passes-container">
+                        <p class="info-text">Click the button above to see when the ISS will be visible from your location.</p>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h2>About the ISS</h2>
+                    <ul class="facts">
+                        <li>Orbits Earth every ~90 minutes</li>
+                        <li>Travels at ~7.66 km/s</li>
+                        <li>Altitude: 408 km above Earth</li>
+                        <li>Crew: Typically 6-7 astronauts</li>
+                    </ul>
+                </div>
+
+                <div class="status">
+                    <span id="lastUpdate">Last updated: --</span>
+                    <span id="status" class="status-indicator">●</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Mandelbrot Set Animation
-        const canvas = document.getElementById('mandelbrotCanvas');
-        const ctx = canvas.getContext('2d');
-
-        // Set canvas size
-        function resizeCanvas() {
-            const size = Math.min(window.innerWidth * 0.6, window.innerHeight * 0.7, 600);
-            canvas.width = size;
-            canvas.height = size;
-        }
-        resizeCanvas();
-        window.addEventListener('resize', () => {
-            resizeCanvas();
-            drawMandelbrot();
-        });
-
-        let zoom = 1;
-        let offsetX = -0.5;
-        let offsetY = 0;
-        let animating = true;
-        let colorScheme = 0;
-        let maxIterations = 100;
-
-        const colorSchemes = [
-            // Classic green
-            (i) => {
-                const hue = 120;
-                const sat = 100;
-                const light = (i / maxIterations) * 70;
-                return `hsl(${hue}, ${sat}%, ${light}%)`;
-            },
-            // Rainbow
-            (i) => {
-                const hue = (i / maxIterations) * 360;
-                return `hsl(${hue}, 100%, 50%)`;
-            },
-            // Blue-purple
-            (i) => {
-                const hue = 240 + (i / maxIterations) * 60;
-                const light = (i / maxIterations) * 70;
-                return `hsl(${hue}, 100%, ${light}%)`;
-            },
-            // Fire
-            (i) => {
-                const hue = (i / maxIterations) * 60;
-                const light = 30 + (i / maxIterations) * 50;
-                return `hsl(${hue}, 100%, ${light}%)`;
-            }
-        ];
-
-        function mandelbrot(x, y) {
-            let real = x;
-            let imag = y;
-            let iterations = 0;
-
-            while (iterations < maxIterations) {
-                const real2 = real * real;
-                const imag2 = imag * imag;
-
-                if (real2 + imag2 > 4) break;
-
-                const newReal = real2 - imag2 + x;
-                imag = 2 * real * imag + y;
-                real = newReal;
-
-                iterations++;
-            }
-
-            return iterations;
-        }
-
-        function drawMandelbrot() {
-            const width = canvas.width;
-            const height = canvas.height;
-            const imageData = ctx.createImageData(width, height);
-
-            for (let px = 0; px < width; px++) {
-                for (let py = 0; py < height; py++) {
-                    const x = (px - width / 2) / (width / 4) / zoom + offsetX;
-                    const y = (py - height / 2) / (height / 4) / zoom + offsetY;
-
-                    const iterations = mandelbrot(x, y);
-                    const pixelIndex = (py * width + px) * 4;
-
-                    if (iterations === maxIterations) {
-                        imageData.data[pixelIndex] = 0;
-                        imageData.data[pixelIndex + 1] = 0;
-                        imageData.data[pixelIndex + 2] = 0;
-                        imageData.data[pixelIndex + 3] = 255;
-                    } else {
-                        const color = colorSchemes[colorScheme](iterations);
-                        const rgb = hslToRgb(color);
-                        imageData.data[pixelIndex] = rgb[0];
-                        imageData.data[pixelIndex + 1] = rgb[1];
-                        imageData.data[pixelIndex + 2] = rgb[2];
-                        imageData.data[pixelIndex + 3] = 255;
-                    }
-                }
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-        }
-
-        function hslToRgb(hsl) {
-            const match = hsl.match(/hsl\((\d+\.?\d*),\s*(\d+\.?\d*)%,\s*(\d+\.?\d*)%\)/);
-            if (!match) {
-                console.error('Failed to parse HSL:', hsl);
-                return [0, 0, 0];
-            }
-            const h = parseFloat(match[1]) / 360;
-            const s = parseFloat(match[2]) / 100;
-            const l = parseFloat(match[3]) / 100;
-
-            let r, g, b;
-
-            if (s === 0) {
-                r = g = b = l;
-            } else {
-                const hue2rgb = (p, q, t) => {
-                    if (t < 0) t += 1;
-                    if (t > 1) t -= 1;
-                    if (t < 1/6) return p + (q - p) * 6 * t;
-                    if (t < 1/2) return q;
-                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                    return p;
-                };
-
-                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-                const p = 2 * l - q;
-                r = hue2rgb(p, q, h + 1/3);
-                g = hue2rgb(p, q, h);
-                b = hue2rgb(p, q, h - 1/3);
-            }
-
-            return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-        }
-
-        function animate() {
-            if (animating) {
-                zoom *= 1.01;
-                offsetX += Math.cos(Date.now() / 10000) * 0.001 / zoom;
-                offsetY += Math.sin(Date.now() / 10000) * 0.001 / zoom;
-                
-                if (zoom > 100) {
-                    zoom = 1;
-                    offsetX = Math.random() * 0.5 - 0.75;
-                    offsetY = Math.random() * 0.5 - 0.25;
-                }
-
-                drawMandelbrot();
-            }
-            requestAnimationFrame(animate);
-        }
-
-        function resetZoom() {
-            zoom = 1;
-            offsetX = -0.5;
-            offsetY = 0;
-            drawMandelbrot();
-        }
-
-        function toggleAnimation() {
-            animating = !animating;
-        }
-
-        function changeColors() {
-            colorScheme = (colorScheme + 1) % colorSchemes.length;
-            drawMandelbrot();
-        }
-
-        // Gaming Champions Data
-        const champions = [
-            {
-                name: "Billy Mitchell",
-                game: "Pac-Man",
-                achievement: "First perfect score (3,333,360)",
-                year: "1999"
-            },
-            {
-                name: "Steve Wiebe",
-                game: "Donkey Kong",
-                achievement: "Multiple world records",
-                year: "1980s-2000s"
-            },
-            {
-                name: "Roy Shildt",
-                game: "Defender",
-                achievement: "World record holder",
-                year: "1981"
-            },
-            {
-                name: "Doris Self",
-                game: "Q*bert",
-                achievement: "World champion, 1.1M+ points",
-                year: "1984"
-            },
-            {
-                name: "Todd Rogers",
-                game: "Dragster",
-                achievement: "Legendary speedrunner",
-                year: "1982"
-            },
-            {
-                name: "Twin Galaxies",
-                game: "Various",
-                achievement: "Official scorekeeping organization",
-                year: "Est. 1981"
-            },
-            {
-                name: "Walter Day",
-                game: "Various",
-                achievement: "Founder of Twin Galaxies",
-                year: "1980s"
-            },
-            {
-                name: "Takahashi Meijin",
-                game: "Various",
-                achievement: "16 button presses per second",
-                year: "1980s"
-            },
-            {
-                name: "Thor Aackerlund",
-                game: "Missile Command",
-                achievement: "World record holder",
-                year: "1982"
-            },
-            {
-                name: "Tim McVey",
-                game: "Gyruss",
-                achievement: "World champion",
-                year: "1984"
-            },
-            {
-                name: "Hector Rodriguez",
-                game: "Centipede",
-                achievement: "Multiple world records",
-                year: "1980s"
-            },
-            {
-                name: "Dwayne Richard",
-                game: "Joust",
-                achievement: "World champion",
-                year: "1983"
-            },
-            {
-                name: "Tom Asaki",
-                game: "Tempest",
-                achievement: "World record holder",
-                year: "1980s"
-            },
-            {
-                name: "Umehara Daigo",
-                game: "Street Fighter",
-                achievement: "The Beast - Fighting game legend",
-                year: "1990s-present"
-            },
-            {
-                name: "Justin Wong",
-                game: "Marvel vs Capcom",
-                achievement: "Fighting game champion",
-                year: "1990s-2000s"
-            },
-            {
-                name: "Isai Alvarado",
-                game: "Super Smash Bros.",
-                achievement: "Legendary N64 player",
-                year: "1990s-2000s"
-            },
-            {
-                name: "Fatal1ty (Johnathan Wendel)",
-                game: "Quake III",
-                achievement: "First pro gaming millionaire",
-                year: "1999-2000s"
-            },
-            {
-                name: "Dennis Fong (Thresh)",
-                game: "Quake",
-                achievement: "Won Carmack's Ferrari",
-                year: "1997"
-            },
-            {
-                name: "Tomo Ohira",
-                game: "Street Fighter II",
-                achievement: "Japanese champion",
-                year: "1990s"
-            },
-            {
-                name: "Mike Iarossi",
-                game: "Burgertime",
-                achievement: "World record holder",
-                year: "1980s"
-            },
-            {
-                name: "Chris Tang",
-                game: "Tetris",
-                achievement: "World champion",
-                year: "1990"
-            },
-            {
-                name: "Ben Gold",
-                game: "Ms. Pac-Man",
-                achievement: "World record holder",
-                year: "1990s"
-            },
-            {
-                name: "Gary Stern",
-                game: "Berzerk",
-                achievement: "World champion",
-                year: "1982"
-            },
-            {
-                name: "Joel West",
-                game: "Asteroids",
-                achievement: "World record holder",
-                year: "1982"
-            },
-            {
-                name: "Leo Daniels",
-                game: "Donkey Kong Jr.",
-                achievement: "World champion",
-                year: "1980s"
-            }
-        ];
-
-        // Populate champions list
-        function populateChampions() {
-            const list = document.getElementById('championsList');
-            
-            // Duplicate the list to create seamless scrolling
-            const duplicatedChampions = [...champions, ...champions];
-            
-            duplicatedChampions.forEach(champion => {
-                const card = document.createElement('div');
-                card.className = 'champion-card';
-                card.innerHTML = `
-                    <h3>${champion.name}</h3>
-                    <div class="game">🎮 ${champion.game}</div>
-                    <div class="achievement">🏆 ${champion.achievement}</div>
-                    <div class="year">📅 ${champion.year}</div>
-                `;
-                list.appendChild(card);
-            });
-        }
-
-        // Initialize
-        populateChampions();
-        
-        // Ensure canvas is ready before drawing
-        window.addEventListener('load', () => {
-            drawMandelbrot();
-        });
-        
-        animate();
-
-        // Click to zoom on Mandelbrot
-        canvas.addEventListener('click', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            offsetX += (x - canvas.width / 2) / (canvas.width / 4) / zoom;
-            offsetY += (y - canvas.height / 2) / (canvas.height / 4) / zoom;
-            zoom *= 2;
-            
-            drawMandelbrot();
-        });
-    </script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>

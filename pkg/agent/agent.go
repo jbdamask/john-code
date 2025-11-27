@@ -123,7 +123,8 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
 }
 
 func (a *Agent) Run() error {
-	a.ui.Print("John Code initialized. Type 'exit' or 'quit' to stop.")
+    a.ui.DrawBanner("Sonnet 4.5")
+	a.ui.Print("Type 'exit' or 'quit' to stop.")
 
     cwd, err := os.Getwd()
     if err == nil {

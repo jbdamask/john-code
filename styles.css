@@ -1,0 +1,221 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    color: #ffffff;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.subtitle {
+    font-size: 1.1rem;
+    color: #a8a8a8;
+}
+
+.content {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+#map {
+    height: 600px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    z-index: 1;
+}
+
+.info-panel {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.info-section h2 {
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+    color: #64b5f6;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.stat {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.label {
+    color: #a8a8a8;
+    font-size: 0.9rem;
+}
+
+.value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #64b5f6;
+}
+
+.btn {
+    width: 100%;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-weight: 600;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.passes-container {
+    margin-top: 10px;
+}
+
+.pass-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border-left: 3px solid #64b5f6;
+}
+
+.pass-time {
+    font-weight: 600;
+    color: #64b5f6;
+    margin-bottom: 5px;
+}
+
+.pass-duration {
+    font-size: 0.9rem;
+    color: #a8a8a8;
+}
+
+.info-text {
+    color: #a8a8a8;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.facts {
+    list-style: none;
+    padding-left: 0;
+}
+
+.facts li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.95rem;
+}
+
+.facts li:last-child {
+    border-bottom: none;
+}
+
+.status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    color: #a8a8a8;
+}
+
+.status-indicator {
+    color: #4caf50;
+    font-size: 1.5rem;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.error {
+    color: #ff6b6b;
+    padding: 10px;
+    background: rgba(255, 107, 107, 0.1);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 968px) {
+    .content {
+        grid-template-columns: 1fr;
+    }
+    
+    #map {
+        height: 400px;
+    }
+    
+    header h1 {
+        font-size: 2rem;
+    }
+}
+
+/* Custom ISS icon styles */
+.iss-icon {
+    background: transparent;
+    border: none;
+}
+
+.leaflet-popup-content-wrapper {
+    background: rgba(30, 30, 30, 0.95);
+    color: white;
+    border-radius: 8px;
+}
+
+.leaflet-popup-tip {
+    background: rgba(30, 30, 30, 0.95);
+}
