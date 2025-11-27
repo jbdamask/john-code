@@ -12,7 +12,7 @@ import (
 
 func (u *UI) DrawBanner(modelName string) {
 	// Styles
-	borderColor := lipgloss.Color("#D97757") // Orange/Reddish from screenshot
+	borderColor := lipgloss.Color("46") // Standard ANSI Green
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
