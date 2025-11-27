@@ -43,7 +43,8 @@ func (u *UI) DrawBanner(modelName string) {
 		Bold(true).
 		Foreground(lipgloss.Color("#FFFFFF")).
 		Align(lipgloss.Center).
-        Width(30)
+        Width(30).
+        MarginTop(1)
 
     // Logo is pre-generated in logo.go as const Logo
     logoStyle := lipgloss.NewStyle().
