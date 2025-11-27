@@ -15,12 +15,22 @@ type ReadTool struct{}
 func (t *ReadTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "Read",
-		Description: "Reads a file from the local filesystem.",
+		Description: `Reads a file from the local filesystem.
+- Must use absolute paths, not relative
+- Reads up to 2000 lines by default from beginning
+- Can specify offset and limit for long files
+- Lines longer than 2000 chars are truncated
+- Can read images (PNG, JPG), PDFs, and Jupyter notebooks
+- Cannot read directories (use ls via Bash for that)
+- Call multiple Read operations in parallel when useful
+- If file exists but is empty, receive a warning
+- MUST read file before using Edit or Write on existing files`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"file_path": map[string]interface{}{
 					"type": "string",
+                    "description": "The absolute path to the file to read",
 				},
 			},
 			"required": []string{"file_path"},
@@ -65,15 +75,23 @@ type WriteTool struct{}
 func (t *WriteTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "Write",
-		Description: "Writes a file to the local filesystem.",
+		Description: `Writes files to the local filesystem.
+- Overwrites existing files
+- If file exists, MUST use Read tool first (tool will fail otherwise)
+- ALWAYS prefer editing existing files over creating new ones
+- NEVER proactively create documentation files (*.md) or READMEs unless explicitly requested
+- Only use emojis if user explicitly requests it
+- Must use absolute paths, not relative`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"file_path": map[string]interface{}{
 					"type": "string",
+                    "description": "The absolute path to the file to write",
 				},
 				"content": map[string]interface{}{
 					"type": "string",
+                    "description": "The content to write to the file",
 				},
 			},
 			"required": []string{"file_path", "content"},
@@ -104,7 +122,13 @@ type GlobTool struct{}
 func (t *GlobTool) Definition() ToolDefinition {
     return ToolDefinition{
         Name: "Glob",
-        Description: "Fast file pattern matching tool.",
+        Description: `Fast file pattern matching tool.
+- Works with any codebase size
+- Supports glob patterns like **/*.js or src/**/*.tsx
+- Returns matching file paths sorted by modification time
+- Use when finding files by name patterns
+- For open-ended searches requiring multiple rounds, use Task tool instead
+- Can call multiple Glob operations in parallel if potentially useful`,
         Schema: map[string]interface{}{
             "type": "object",
             "properties": map[string]interface{}{
@@ -164,13 +188,29 @@ type EditTool struct{}
 func (t *EditTool) Definition() ToolDefinition {
     return ToolDefinition{
         Name: "Edit",
-        Description: "Performs exact string replacements in files.",
+        Description: `Performs exact string replacements in files.
+- MUST use Read tool at least once before editing
+- Preserve exact indentation as it appears AFTER the line number prefix in Read output
+- Never include line number prefix in old_string or new_string
+- ALWAYS prefer editing existing files over writing new ones
+- Edit will FAIL if old_string is not unique - either provide more context or use replace_all
+- Use replace_all for renaming variables across file
+- Avoid backwards-compatibility hacks like renaming to _var, re-exporting types, // removed comments - delete unused code completely`,
         Schema: map[string]interface{}{
             "type": "object",
             "properties": map[string]interface{}{
-                "file_path": map[string]interface{}{"type": "string"},
-                "old_string": map[string]interface{}{"type": "string"},
-                "new_string": map[string]interface{}{"type": "string"},
+                "file_path": map[string]interface{}{
+                    "type": "string",
+                    "description": "The absolute path to the file to edit",
+                },
+                "old_string": map[string]interface{}{
+                    "type": "string",
+                    "description": "The exact string to search for",
+                },
+                "new_string": map[string]interface{}{
+                    "type": "string",
+                    "description": "The string to replace it with",
+                },
             },
             "required": []string{"file_path", "old_string", "new_string"},
         },

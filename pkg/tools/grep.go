@@ -11,7 +11,14 @@ type GrepTool struct{}
 func (t *GrepTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "Grep",
-		Description: "Powerful search tool built on ripgrep.",
+		Description: `Powerful search tool built on ripgrep.
+- ALWAYS use Grep for search tasks, NEVER invoke grep or rg as Bash command
+- Supports full regex syntax
+- Filter files with glob parameter or type parameter
+- Output modes: "content" (matching lines), "files_with_matches" (file paths, default), "count" (match counts)
+- Pattern syntax uses ripgrep - literal braces need escaping
+- For cross-line patterns, use multiline: true
+- Supports context lines with -A, -B, -C`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -29,6 +36,7 @@ func (t *GrepTool) Definition() ToolDefinition {
 				},
 				"caseSensitive": map[string]interface{}{
 					"type": "boolean",
+                    "description": "Whether to search case-sensitively",
 				},
 			},
 			"required": []string{"pattern"},

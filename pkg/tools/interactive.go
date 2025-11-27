@@ -22,7 +22,9 @@ func NewAskUserQuestionTool(ui UserPrompter) *AskUserQuestionTool {
 func (t *AskUserQuestionTool) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "AskUserQuestion",
-		Description: "Ask the user a question to get clarification or make a decision.",
+		Description: `Ask user questions during execution.
+- Use to gather preferences/requirements, clarify ambiguous instructions, get decisions on implementation choices
+- Users can always select "Other" for custom text input`,
 		Schema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
