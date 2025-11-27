@@ -8,16 +8,25 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+    "golang.org/x/term"
 )
 
 func (u *UI) DrawBanner(modelName string) {
+    // Get terminal width
+    width, _, err := term.GetSize(int(os.Stdout.Fd()))
+    if err != nil {
+        width = 80 // Default fallback
+    }
+    // Add some margin
+    bannerWidth := width - 4
+    
 	// Styles
 	borderColor := lipgloss.Color("46") // Standard ANSI Green
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Padding(1, 2).
-		Width(80)
+		Width(bannerWidth)
 
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#7D7D7D")). // Grayish
@@ -67,25 +76,35 @@ func (u *UI) DrawBanner(modelName string) {
         Width(30)
 
 	// Left Column
+    // Calculate adaptive width for columns
+    leftWidth := 35
+    rightWidth := bannerWidth - leftWidth - 10 // Account for padding/margins/border
+    
 	leftCol := lipgloss.JoinVertical(
 		lipgloss.Center,
-		welcomeStyle.Render(welcomeMsg),
-		logoStyle.Render(Logo),
-		infoStyle.Render(infoBlock),
+		welcomeStyle.Width(leftWidth).Render(welcomeMsg),
+		logoStyle.Width(leftWidth).Render(Logo),
+		infoStyle.Width(leftWidth).Render(infoBlock),
 	)
 
 	// Right Column (Tips & Activity)
 	tipsHeader := lipgloss.NewStyle().Foreground(borderColor).Render("Tips for getting started")
-	tipsBody := "Run /init to create a CLAUDE.md file wi..."
+    // Wrap text for tips
+	tipsBody := lipgloss.NewStyle().Width(rightWidth).Render("Run /init to create a CLAUDE.md file with project instructions.")
     
     activityHeader := lipgloss.NewStyle().Foreground(borderColor).MarginTop(1).Render("Recent activity")
-    activityBody := "No recent activity" // TODO: Pull from session history
+    activityBody := lipgloss.NewStyle().Width(rightWidth).Render("No recent activity") // TODO: Pull from session history
+
+    // Horizontal separator line
+    separator := lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#333333")).
+        Render(strings.Repeat("─", rightWidth))
 
 	rightCol := lipgloss.JoinVertical(
 		lipgloss.Left,
 		tipsHeader,
 		tipsBody,
-        lipgloss.NewStyle().Foreground(lipgloss.Color("#333333")).Render("─────────────────────────────"),
+        separator,
         activityHeader,
         activityBody,
 	)
@@ -94,7 +113,13 @@ func (u *UI) DrawBanner(modelName string) {
     content := lipgloss.JoinHorizontal(
         lipgloss.Top,
         leftCol,
-        lipgloss.NewStyle().Border(lipgloss.NormalBorder(), false, false, false, true).BorderForeground(borderColor).Margin(0, 2).Padding(0, 2).Render(rightCol),
+        lipgloss.NewStyle().
+            Border(lipgloss.NormalBorder(), false, false, false, true).
+            BorderForeground(borderColor).
+            Margin(0, 2).
+            Padding(0, 2).
+            Height(15). // Match approximate height of left col or let it flow?
+            Render(rightCol),
     )
 
 	// Render
