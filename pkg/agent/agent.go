@@ -17,14 +17,15 @@ import (
 )
 
 type Agent struct {
-	cfg        *config.Config
-	ui         *ui.UI
-	tools      *tools.Registry
-	commands   *commands.Registry
-	mcpManager *mcp.Manager
-	client     llm.Client
-	history    []llm.Message
-	session    *history.SessionManager
+	cfg          *config.Config
+	ui           *ui.UI
+	tools        *tools.Registry
+	commands     *commands.Registry
+	mcpManager   *mcp.Manager
+	client       llm.Client
+	currentModel string
+	history      []llm.Message
+	session      *history.SessionManager
 }
 
 func New(cfg *config.Config, ui *ui.UI) *Agent {
@@ -89,44 +90,19 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
         return subAgent.RunTask(ctx)
     }
     
-    registry.Register(tools.NewTaskTool(taskRunner))
-
-    // Use real client if configured
-    var client llm.Client
-    if cfg.APIKey != "dummy" && cfg.APIKey != "" {
-        client = llm.NewAnthropicClient(cfg.APIKey, cfg.BaseURL)
-    } else {
-        client = llm.NewMockClient()
-    }
-
-    // Initialize Session Manager
-    // We need CWD
-    // Since we use NewBashTool which gets CWD, we should match.
-    // But NewBashTool is internal.
-    // Let's just use "." and let SessionManager expand it.
-    // Actually SessionManager does string replacement, so we should get absolute path.
-    
-    // We'll initialize it in New, logging error if fails but not crashing?
-    
-	// We can't get error from New easily without changing signature.
-	// Let's assume we can get CWD.
+	registry.Register(tools.NewTaskTool(taskRunner))
 
 	// Initialize MCP manager
 	mcpManager := mcp.NewManager()
 
-	// Initialize slash commands
-	cmdRegistry := commands.NewRegistry()
-	cmdRegistry.Register(commands.NewInitCommand())
-	cmdRegistry.Register(commands.NewMCPCommand(mcpManager))
-
-	return &Agent{
-		cfg:        cfg,
-		ui:         ui,
-		tools:      registry,
-		commands:   cmdRegistry,
-		mcpManager: mcpManager,
-		client:     client,
-		session:    nil, // Will init in Run
+	// Create the agent first (client will be set after)
+	agent := &Agent{
+		cfg:          cfg,
+		ui:           ui,
+		tools:        registry,
+		mcpManager:   mcpManager,
+		currentModel: llm.DefaultModelID,
+		session:      nil, // Will init in Run
 		history: []llm.Message{
 			{
 				Role:    llm.RoleSystem,
@@ -134,10 +110,82 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
 			},
 		},
 	}
+
+	// Initialize the client for the default model
+	agent.client = agent.createClientForModel(llm.DefaultModelID)
+
+	// Initialize slash commands (model command needs reference to agent)
+	cmdRegistry := commands.NewRegistry()
+	cmdRegistry.Register(commands.NewInitCommand())
+	cmdRegistry.Register(commands.NewMCPCommand(mcpManager))
+	cmdRegistry.Register(commands.NewModelCommand(agent.currentModel, agent.switchModel))
+
+	agent.commands = cmdRegistry
+
+	return agent
+}
+
+// createClientForModel creates an LLM client for the specified model
+func (a *Agent) createClientForModel(modelID string) llm.Client {
+	model := llm.GetModelByID(modelID)
+	if model == nil {
+		// Fallback to mock if model not found
+		return llm.NewMockClient()
+	}
+
+	switch model.Provider {
+	case llm.ProviderAnthropic:
+		apiKey := a.cfg.APIKey
+		if apiKey == "" || apiKey == "dummy" {
+			return llm.NewMockClient()
+		}
+		return llm.NewAnthropicClient(apiKey, a.cfg.BaseURL, model.APIModel)
+
+	case llm.ProviderOpenAI:
+		apiKey := os.Getenv("OPENAI_API_KEY")
+		if apiKey == "" {
+			a.ui.Print("Warning: OPENAI_API_KEY not set, using mock client")
+			return llm.NewMockClient()
+		}
+		return llm.NewOpenAIClient(apiKey, model.APIModel)
+
+	case llm.ProviderGoogle:
+		apiKey := os.Getenv("GEMINI_API_KEY")
+		if apiKey == "" {
+			a.ui.Print("Warning: GEMINI_API_KEY not set, using mock client")
+			return llm.NewMockClient()
+		}
+		return llm.NewGeminiClient(apiKey, model.APIModel)
+
+	default:
+		return llm.NewMockClient()
+	}
+}
+
+// switchModel changes the current model
+func (a *Agent) switchModel(modelID string) error {
+	model := llm.GetModelByID(modelID)
+	if model == nil {
+		return fmt.Errorf("unknown model: %s", modelID)
+	}
+
+	a.client = a.createClientForModel(modelID)
+	a.currentModel = modelID
+	a.ui.Print(fmt.Sprintf("Switched to %s", model.Name))
+	return nil
+}
+
+// CurrentModelName returns the display name of the current model
+func (a *Agent) CurrentModelName() string {
+	model := llm.GetModelByID(a.currentModel)
+	if model == nil {
+		return a.currentModel
+	}
+	return model.Name
 }
 
 func (a *Agent) Run() error {
-	a.ui.DrawBanner("Sonnet 4.5")
+	a.ui.DrawBanner(a.CurrentModelName())
 	a.ui.Print("Type 'exit' or 'quit' to stop.")
 
 	cwd, err := os.Getwd()
@@ -196,6 +244,34 @@ func (a *Agent) Run() error {
 					continue // User canceled
 				}
 				cmdName = selected
+			}
+
+			// Handle /model specially - show model picker
+			if cmdName == "model" {
+				modelCmd, ok := a.commands.Get("model")
+				if ok {
+					if mc, ok := modelCmd.(*commands.ModelCommand); ok {
+						models := mc.GetModels()
+						modelInfos := make([]ui.ModelInfo, len(models))
+						for i, m := range models {
+							modelInfos[i] = ui.ModelInfo{
+								ID:          m.ID,
+								Name:        m.Name,
+								Provider:    m.Provider,
+								Description: m.Description,
+								IsCurrent:   m.ID == a.currentModel,
+							}
+						}
+
+						selected := a.ui.PickModel(modelInfos)
+						if selected != "" && selected != a.currentModel {
+							if err := a.switchModel(selected); err != nil {
+								a.ui.Print(fmt.Sprintf("Error switching model: %v", err))
+							}
+						}
+					}
+				}
+				continue
 			}
 
 			// Execute the command by name

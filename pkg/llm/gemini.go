@@ -1,0 +1,306 @@
+package llm
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+const GeminiAPIBase = "https://generativelanguage.googleapis.com/v1beta/models"
+
+type GeminiClient struct {
+	apiKey   string
+	model    string
+	client   *http.Client
+}
+
+func NewGeminiClient(apiKey string, model string) *GeminiClient {
+	if model == "" {
+		model = "gemini-2.5-flash"
+	}
+
+	return &GeminiClient{
+		apiKey: apiKey,
+		model:  model,
+		client: &http.Client{},
+	}
+}
+
+// Gemini API structures
+type geminiRequest struct {
+	Contents         []geminiContent       `json:"contents"`
+	Tools            []geminiTool          `json:"tools,omitempty"`
+	SystemInstruction *geminiContent       `json:"systemInstruction,omitempty"`
+	GenerationConfig *geminiGenerationConfig `json:"generationConfig,omitempty"`
+}
+
+type geminiContent struct {
+	Role  string       `json:"role,omitempty"`
+	Parts []geminiPart `json:"parts"`
+}
+
+type geminiPart struct {
+	Text             string                `json:"text,omitempty"`
+	InlineData       *geminiInlineData     `json:"inlineData,omitempty"`
+	FunctionCall     *geminiFunctionCall   `json:"functionCall,omitempty"`
+	FunctionResponse *geminiFunctionResponse `json:"functionResponse,omitempty"`
+}
+
+type geminiInlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"`
+}
+
+type geminiFunctionCall struct {
+	Name string                 `json:"name"`
+	Args map[string]interface{} `json:"args"`
+}
+
+type geminiFunctionResponse struct {
+	Name     string                 `json:"name"`
+	Response map[string]interface{} `json:"response"`
+}
+
+type geminiTool struct {
+	FunctionDeclarations []geminiFunctionDeclaration `json:"functionDeclarations"`
+}
+
+type geminiFunctionDeclaration struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Parameters  interface{} `json:"parameters"`
+}
+
+type geminiGenerationConfig struct {
+	MaxOutputTokens int `json:"maxOutputTokens,omitempty"`
+}
+
+// Response structures
+type geminiResponse struct {
+	Candidates []geminiCandidate `json:"candidates"`
+}
+
+type geminiCandidate struct {
+	Content geminiContent `json:"content"`
+}
+
+// Streaming structures
+type geminiStreamChunk struct {
+	Candidates []geminiCandidate `json:"candidates"`
+}
+
+func (c *GeminiClient) Generate(ctx context.Context, messages []Message, tools []interface{}) (*Message, error) {
+	return c.GenerateStream(ctx, messages, tools, nil)
+}
+
+func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, tools []interface{}, outputChan chan<- string) (*Message, error) {
+	contents := make([]geminiContent, 0, len(messages))
+	var systemInstruction *geminiContent
+
+	for _, msg := range messages {
+		switch msg.Role {
+		case RoleSystem:
+			systemInstruction = &geminiContent{
+				Parts: []geminiPart{{Text: msg.Content}},
+			}
+
+		case RoleUser:
+			content := geminiContent{
+				Role:  "user",
+				Parts: []geminiPart{},
+			}
+
+			if msg.Content != "" {
+				content.Parts = append(content.Parts, geminiPart{Text: msg.Content})
+			}
+
+			for _, imgPath := range msg.Images {
+				data, err := os.ReadFile(imgPath)
+				if err != nil {
+					continue
+				}
+				ext := strings.ToLower(filepath.Ext(imgPath))
+				var mimeType string
+				switch ext {
+				case ".jpg", ".jpeg":
+					mimeType = "image/jpeg"
+				case ".png":
+					mimeType = "image/png"
+				case ".gif":
+					mimeType = "image/gif"
+				case ".webp":
+					mimeType = "image/webp"
+				default:
+					mimeType = "image/jpeg"
+				}
+				encoded := base64.StdEncoding.EncodeToString(data)
+				content.Parts = append(content.Parts, geminiPart{
+					InlineData: &geminiInlineData{
+						MimeType: mimeType,
+						Data:     encoded,
+					},
+				})
+			}
+
+			contents = append(contents, content)
+
+		case RoleAssistant:
+			content := geminiContent{
+				Role:  "model",
+				Parts: []geminiPart{},
+			}
+
+			if msg.Content != "" {
+				content.Parts = append(content.Parts, geminiPart{Text: msg.Content})
+			}
+
+			for _, tc := range msg.ToolCalls {
+				content.Parts = append(content.Parts, geminiPart{
+					FunctionCall: &geminiFunctionCall{
+						Name: tc.Name,
+						Args: tc.Args,
+					},
+				})
+			}
+
+			contents = append(contents, content)
+
+		case RoleTool:
+			content := geminiContent{
+				Role: "user",
+				Parts: []geminiPart{
+					{
+						FunctionResponse: &geminiFunctionResponse{
+							Name: msg.ToolResult.ToolCallID, // Gemini uses function name here
+							Response: map[string]interface{}{
+								"result": msg.ToolResult.Content,
+							},
+						},
+					},
+				},
+			}
+			contents = append(contents, content)
+		}
+	}
+
+	// Convert tools to Gemini format
+	var geminiTools []geminiTool
+	var funcDecls []geminiFunctionDeclaration
+	for _, t := range tools {
+		if toolMap, ok := t.(map[string]interface{}); ok {
+			name, _ := toolMap["name"].(string)
+			desc, _ := toolMap["description"].(string)
+			schema := toolMap["input_schema"]
+
+			funcDecls = append(funcDecls, geminiFunctionDeclaration{
+				Name:        name,
+				Description: desc,
+				Parameters:  schema,
+			})
+		}
+	}
+	if len(funcDecls) > 0 {
+		geminiTools = append(geminiTools, geminiTool{
+			FunctionDeclarations: funcDecls,
+		})
+	}
+
+	reqBody := geminiRequest{
+		Contents:          contents,
+		Tools:             geminiTools,
+		SystemInstruction: systemInstruction,
+		GenerationConfig: &geminiGenerationConfig{
+			MaxOutputTokens: 8192,
+		},
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Gemini uses different endpoint for streaming
+	endpoint := fmt.Sprintf("%s/%s:streamGenerateContent?key=%s&alt=sse",
+		GeminiAPIBase, c.model, c.apiKey)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	finalMsg := &Message{
+		Role:      RoleAssistant,
+		ToolCalls: []ToolCall{},
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	toolCallIndex := 0
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("error reading stream: %w", err)
+		}
+
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "" {
+			continue
+		}
+
+		var chunk geminiStreamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+
+		for _, candidate := range chunk.Candidates {
+			for _, part := range candidate.Content.Parts {
+				if part.Text != "" {
+					finalMsg.Content += part.Text
+					if outputChan != nil {
+						outputChan <- part.Text
+					}
+				}
+
+				if part.FunctionCall != nil {
+					finalMsg.ToolCalls = append(finalMsg.ToolCalls, ToolCall{
+						ID:   fmt.Sprintf("call_%d", toolCallIndex),
+						Name: part.FunctionCall.Name,
+						Args: part.FunctionCall.Args,
+					})
+					toolCallIndex++
+				}
+			}
+		}
+	}
+
+	return finalMsg, nil
+}

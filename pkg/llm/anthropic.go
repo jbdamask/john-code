@@ -15,15 +15,15 @@ import (
 )
 
 const DefaultAnthropicEndpoint = "https://api.anthropic.com/v1/messages"
-const Model = "claude-sonnet-4-5-20250929"
 
 type AnthropicClient struct {
 	apiKey   string
 	endpoint string
+	model    string
 	client   *http.Client
 }
 
-func NewAnthropicClient(apiKey string, baseURL string) *AnthropicClient {
+func NewAnthropicClient(apiKey string, baseURL string, model string) *AnthropicClient {
     endpoint := DefaultAnthropicEndpoint
     if baseURL != "" {
         // Construct endpoint from baseURL
@@ -42,9 +42,14 @@ func NewAnthropicClient(apiKey string, baseURL string) *AnthropicClient {
         }
     }
 
+	if model == "" {
+		model = "claude-sonnet-4-5-20250929" // Default model
+	}
+
 	return &AnthropicClient{
 		apiKey:   apiKey,
 		endpoint: endpoint,
+		model:    model,
 		client:   &http.Client{},
 	}
 }
@@ -207,12 +212,12 @@ func (c *AnthropicClient) GenerateStream(ctx context.Context, messages []Message
 	}
 
 	reqBody := apiRequest{
-		Model:     Model,
+		Model:     c.model,
 		MaxTokens: 8192,
 		Messages:  apiMessages,
 		Tools:     tools,
-        System:    systemPrompt,
-        Stream:    true,
+		System:    systemPrompt,
+		Stream:    true,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
