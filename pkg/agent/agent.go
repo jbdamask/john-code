@@ -3,10 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
-    "io/ioutil"
-    "os"
-    "strings"
+	"io/ioutil"
+	"os"
+	"strings"
 
+	"github.com/jbdamask/john-code/pkg/commands"
 	"github.com/jbdamask/john-code/pkg/config"
 	"github.com/jbdamask/john-code/pkg/history"
 	"github.com/jbdamask/john-code/pkg/llm"
@@ -15,12 +16,13 @@ import (
 )
 
 type Agent struct {
-	cfg     *config.Config
-	ui      *ui.UI
-	tools   *tools.Registry
-	client  llm.Client
-	history []llm.Message
-    session *history.SessionManager
+	cfg      *config.Config
+	ui       *ui.UI
+	tools    *tools.Registry
+	commands *commands.Registry
+	client   llm.Client
+	history  []llm.Message
+	session  *history.SessionManager
 }
 
 func New(cfg *config.Config, ui *ui.UI) *Agent {
@@ -104,21 +106,26 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
     
     // We'll initialize it in New, logging error if fails but not crashing?
     
-    // We can't get error from New easily without changing signature.
-    // Let's assume we can get CWD.
-    
+	// We can't get error from New easily without changing signature.
+	// Let's assume we can get CWD.
+
+	// Initialize slash commands
+	cmdRegistry := commands.NewRegistry()
+	cmdRegistry.Register(commands.NewInitCommand())
+
 	return &Agent{
-		cfg:    cfg,
-		ui:     ui,
-		tools:  registry,
-		client: client,
-        session: nil, // Will init in Run
+		cfg:      cfg,
+		ui:       ui,
+		tools:    registry,
+		commands: cmdRegistry,
+		client:   client,
+		session:  nil, // Will init in Run
 		history: []llm.Message{
-            {
-                Role: llm.RoleSystem,
-                Content: SystemPrompt,
-            },
-        },
+			{
+				Role:    llm.RoleSystem,
+				Content: SystemPrompt,
+			},
+		},
 	}
 }
 
@@ -142,34 +149,84 @@ func (a *Agent) Run() error {
 		if input == "exit" || input == "quit" {
 			break
 		}
-        if input == "" {
-            continue
-        }
+		if input == "" {
+			continue
+		}
+
+		// Check for slash command trigger
+		if strings.HasPrefix(input, "/") {
+			cmdName := strings.TrimPrefix(input, "/")
+			cmdName = strings.TrimSpace(cmdName)
+
+			// If just "/", show picker
+			if cmdName == "" {
+				cmdList := a.commands.List()
+				if len(cmdList) == 0 {
+					a.ui.Print("No commands available")
+					continue
+				}
+
+				// Build command info for picker
+				cmdInfos := make([]ui.CommandInfo, len(cmdList))
+				for i, cmd := range cmdList {
+					cmdInfos[i] = ui.CommandInfo{
+						Name:        cmd.Name(),
+						Description: cmd.Description(),
+					}
+				}
+
+				selected := a.ui.PickCommand(cmdInfos)
+				if selected == "" {
+					continue // User canceled
+				}
+				cmdName = selected
+			}
+
+			// Execute the command by name
+			cmd, ok := a.commands.Get(cmdName)
+			if !ok {
+				a.ui.Print(fmt.Sprintf("Unknown command: /%s", cmdName))
+				continue
+			}
+
+			commandMessage, instructions, err := cmd.Execute()
+			if err != nil {
+				a.ui.Print(fmt.Sprintf("Error executing command: %v", err))
+				continue
+			}
+
+			// Use the command output as the input
+			input = commandMessage + "\n" + instructions
+		}
 
 		// Parse for images in input
-        var images []string
-        cleanInput := input
-        
-        // Very basic regex-like parsing for [Image: path]
-        for {
-            start := strings.Index(cleanInput, "[Image: ")
-            if start == -1 { break }
-            end := strings.Index(cleanInput[start:], "]")
-            if end == -1 { break }
-            
-            fullTag := cleanInput[start : start+end+1]
-            path := strings.TrimPrefix(fullTag, "[Image: ")
-            path = strings.TrimSuffix(path, "]")
-            
-            images = append(images, strings.TrimSpace(path))
-            
-            // Remove tag from text
-            cleanInput = strings.Replace(cleanInput, fullTag, "", 1)
-        }
-        cleanInput = strings.TrimSpace(cleanInput)
+		var images []string
+		cleanInput := input
 
-        // Construct full content with reminders
-        fullContent := cleanInput
+		// Very basic regex-like parsing for [Image: path]
+		for {
+			start := strings.Index(cleanInput, "[Image: ")
+			if start == -1 {
+				break
+			}
+			end := strings.Index(cleanInput[start:], "]")
+			if end == -1 {
+				break
+			}
+
+			fullTag := cleanInput[start : start+end+1]
+			path := strings.TrimPrefix(fullTag, "[Image: ")
+			path = strings.TrimSuffix(path, "]")
+
+			images = append(images, strings.TrimSpace(path))
+
+			// Remove tag from text
+			cleanInput = strings.Replace(cleanInput, fullTag, "", 1)
+		}
+		cleanInput = strings.TrimSpace(cleanInput)
+
+		// Construct full content with reminders
+		fullContent := cleanInput
         
         // 1. Inject Todo Status
         todoTool, ok := a.tools.Get("TodoWrite")
@@ -253,7 +310,7 @@ func (a *Agent) processTurn() error {
     ctx := context.Background()
     
     // Max turns to prevent infinite loops
-    for i := 0; i < 10; i++ {
+    for i := 0; i < 50; i++ {
         // Prepare tools for the API
         var apiTools []interface{}
         for _, t := range a.tools.List() {
