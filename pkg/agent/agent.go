@@ -426,22 +426,28 @@ func (a *Agent) processTurn() error {
         }
 
         ch := make(chan string)
-        var resp *llm.Message
-        var genErr error
+        type result struct {
+            resp *llm.Message
+            err  error
+        }
+        resultCh := make(chan result, 1)
         
         go func() {
             defer close(ch)
-            resp, genErr = a.client.GenerateStream(ctx, a.history, apiTools, ch)
+            r, err := a.client.GenerateStream(ctx, a.history, apiTools, ch)
+            resultCh <- result{resp: r, err: err}
         }()
 
         a.ui.DisplayStream(ch)
         
-        if genErr != nil {
-            return genErr
+        res := <-resultCh
+        if res.err != nil {
+            return res.err
         }
-        if resp == nil {
+        if res.resp == nil {
             return fmt.Errorf("generation produced no response")
         }
+        resp := res.resp
 
         a.history = append(a.history, *resp)
         if a.session != nil {

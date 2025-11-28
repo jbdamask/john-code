@@ -32,14 +32,14 @@ var SupportedModels = []ModelInfo{
 		ID:          "claude-opus-4.5",
 		Name:        "Claude Opus 4.5",
 		Provider:    ProviderAnthropic,
-		APIModel:    "claude-opus-4-5-20250929",
+		APIModel:    "claude-opus-4-5-20251101",
 		Description: "Most capable, best for complex tasks",
 	},
 	{
 		ID:          "claude-haiku-4.5",
 		Name:        "Claude Haiku 4.5",
 		Provider:    ProviderAnthropic,
-		APIModel:    "claude-haiku-4-5-20250929",
+		APIModel:    "claude-haiku-4-5-20251001",
 		Description: "Fastest, best for simple tasks",
 	},
 
