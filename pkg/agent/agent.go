@@ -11,18 +11,20 @@ import (
 	"github.com/jbdamask/john-code/pkg/config"
 	"github.com/jbdamask/john-code/pkg/history"
 	"github.com/jbdamask/john-code/pkg/llm"
+	"github.com/jbdamask/john-code/pkg/mcp"
 	"github.com/jbdamask/john-code/pkg/tools"
 	"github.com/jbdamask/john-code/pkg/ui"
 )
 
 type Agent struct {
-	cfg      *config.Config
-	ui       *ui.UI
-	tools    *tools.Registry
-	commands *commands.Registry
-	client   llm.Client
-	history  []llm.Message
-	session  *history.SessionManager
+	cfg        *config.Config
+	ui         *ui.UI
+	tools      *tools.Registry
+	commands   *commands.Registry
+	mcpManager *mcp.Manager
+	client     llm.Client
+	history    []llm.Message
+	session    *history.SessionManager
 }
 
 func New(cfg *config.Config, ui *ui.UI) *Agent {
@@ -109,17 +111,22 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
 	// We can't get error from New easily without changing signature.
 	// Let's assume we can get CWD.
 
+	// Initialize MCP manager
+	mcpManager := mcp.NewManager()
+
 	// Initialize slash commands
 	cmdRegistry := commands.NewRegistry()
 	cmdRegistry.Register(commands.NewInitCommand())
+	cmdRegistry.Register(commands.NewMCPCommand(mcpManager))
 
 	return &Agent{
-		cfg:      cfg,
-		ui:       ui,
-		tools:    registry,
-		commands: cmdRegistry,
-		client:   client,
-		session:  nil, // Will init in Run
+		cfg:        cfg,
+		ui:         ui,
+		tools:      registry,
+		commands:   cmdRegistry,
+		mcpManager: mcpManager,
+		client:     client,
+		session:    nil, // Will init in Run
 		history: []llm.Message{
 			{
 				Role:    llm.RoleSystem,
@@ -130,19 +137,28 @@ func New(cfg *config.Config, ui *ui.UI) *Agent {
 }
 
 func (a *Agent) Run() error {
-    a.ui.DrawBanner("Sonnet 4.5")
+	a.ui.DrawBanner("Sonnet 4.5")
 	a.ui.Print("Type 'exit' or 'quit' to stop.")
 
-    cwd, err := os.Getwd()
-    if err == nil {
-        sm, err := history.NewSessionManager(cwd)
-        if err != nil {
-            a.ui.Print(fmt.Sprintf("Warning: Failed to initialize session manager: %v", err))
-        } else {
-            a.session = sm
-            a.ui.Print(fmt.Sprintf("Session ID: %s", sm.SessionID))
-        }
-    }
+	cwd, err := os.Getwd()
+	if err == nil {
+		sm, err := history.NewSessionManager(cwd)
+		if err != nil {
+			a.ui.Print(fmt.Sprintf("Warning: Failed to initialize session manager: %v", err))
+		} else {
+			a.session = sm
+			a.ui.Print(fmt.Sprintf("Session ID: %s", sm.SessionID))
+		}
+	}
+
+	// Load and connect to MCP servers
+	ctx := context.Background()
+	if err := a.mcpManager.LoadAndConnect(ctx); err != nil {
+		a.ui.Print(fmt.Sprintf("Warning: Failed to load MCP servers: %v", err))
+	}
+
+	// Register MCP tools
+	a.registerMCPTools()
 
 	for {
 		input := a.ui.Prompt("> ")
@@ -276,7 +292,23 @@ func (a *Agent) Run() error {
 			a.ui.Print(fmt.Sprintf("Error: %v", err))
 		}
 	}
+
+	// Cleanup MCP connections
+	a.mcpManager.Close()
+
 	return nil
+}
+
+// registerMCPTools registers all tools from connected MCP servers
+func (a *Agent) registerMCPTools() {
+	mcpTools := a.mcpManager.GetAllTools()
+	for _, toolDef := range mcpTools {
+		mcpTool := tools.NewMCPTool(a.mcpManager, toolDef)
+		a.tools.Register(mcpTool)
+	}
+	if len(mcpTools) > 0 {
+		a.ui.Print(fmt.Sprintf("Registered %d MCP tools", len(mcpTools)))
+	}
 }
 
 func (a *Agent) RunTask(ctx context.Context) (string, error) {
