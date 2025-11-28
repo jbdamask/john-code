@@ -179,20 +179,12 @@ func (m streamModel) View() string {
 }
 
 func (u *UI) DisplayStream(outputChan <-chan string) {
-	m := streamModel{
-		sub:     outputChan,
-		showing: true, // Default to showing
+	// Simple streaming: just print tokens as they arrive
+	// This allows natural terminal scrolling and is more responsive
+	for token := range outputChan {
+		fmt.Print(token)
 	}
-	p := tea.NewProgram(m)
-	finalModel, err := p.Run()
-	if err != nil {
-		fmt.Printf("Error in stream display: %v\n", err)
-	}
-
-	// Print the final content after bubbletea exits (it clears the screen)
-	if sm, ok := finalModel.(streamModel); ok && sm.content != "" {
-		fmt.Println(sm.content)
-	}
+	fmt.Println() // Newline at end
 }
 
 // Command Picker for slash commands
