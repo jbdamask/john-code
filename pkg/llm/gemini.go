@@ -174,12 +174,13 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 			contents = append(contents, content)
 
 		case RoleTool:
+			// Gemini expects function responses with the function name
 			content := geminiContent{
-				Role: "user",
+				Role: "function",
 				Parts: []geminiPart{
 					{
 						FunctionResponse: &geminiFunctionResponse{
-							Name: msg.ToolResult.ToolCallID, // Gemini uses function name here
+							Name: msg.ToolResult.ToolName,
 							Response: map[string]interface{}{
 								"result": msg.ToolResult.Content,
 							},
@@ -195,11 +196,31 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 	var geminiTools []geminiTool
 	var funcDecls []geminiFunctionDeclaration
 	for _, t := range tools {
-		if toolMap, ok := t.(map[string]interface{}); ok {
-			name, _ := toolMap["name"].(string)
-			desc, _ := toolMap["description"].(string)
-			schema := toolMap["input_schema"]
+		var name, desc string
+		var schema interface{}
 
+		// Handle both ToolDefinition struct and map[string]interface{}
+		switch tool := t.(type) {
+		case map[string]interface{}:
+			name, _ = tool["name"].(string)
+			desc, _ = tool["description"].(string)
+			schema = tool["input_schema"]
+		default:
+			// Try to extract via JSON marshaling (handles ToolDefinition)
+			data, err := json.Marshal(t)
+			if err != nil {
+				continue
+			}
+			var toolMap map[string]interface{}
+			if err := json.Unmarshal(data, &toolMap); err != nil {
+				continue
+			}
+			name, _ = toolMap["name"].(string)
+			desc, _ = toolMap["description"].(string)
+			schema = toolMap["input_schema"]
+		}
+
+		if name != "" {
 			funcDecls = append(funcDecls, geminiFunctionDeclaration{
 				Name:        name,
 				Description: desc,

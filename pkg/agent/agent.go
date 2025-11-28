@@ -483,7 +483,8 @@ func (a *Agent) processTurn() error {
                 Role: llm.RoleTool,
                 ToolResult: &llm.ToolResult{
                     ToolCallID: tc.ID,
-                    Content: result,
+                    ToolName:   tc.Name,
+                    Content:    result,
                 },
             }
             a.history = append(a.history, toolMsg)
