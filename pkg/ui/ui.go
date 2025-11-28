@@ -184,9 +184,14 @@ func (u *UI) DisplayStream(outputChan <-chan string) {
 		showing: true, // Default to showing
 	}
 	p := tea.NewProgram(m)
-	_, err := p.Run()
+	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Printf("Error in stream display: %v\n", err)
+	}
+
+	// Print the final content after bubbletea exits (it clears the screen)
+	if sm, ok := finalModel.(streamModel); ok && sm.content != "" {
+		fmt.Println(sm.content)
 	}
 }
 
