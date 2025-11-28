@@ -90,7 +90,7 @@ func (u *UI) DrawBanner(modelName string) {
 	// Right Column (Tips & Activity)
 	tipsHeader := lipgloss.NewStyle().Foreground(borderColor).Render("Tips for getting started")
     // Wrap text for tips
-	tipsBody := lipgloss.NewStyle().Width(rightWidth).Render("Run /init to create a CLAUDE.md file with project instructions.")
+	tipsBody := lipgloss.NewStyle().Width(rightWidth).Render("Run /init to create a AGENTS.md file with project instructions.")
     
     activityHeader := lipgloss.NewStyle().Foreground(borderColor).MarginTop(1).Render("Recent activity")
     activityBody := lipgloss.NewStyle().Width(rightWidth).Render("No recent activity") // TODO: Pull from session history
