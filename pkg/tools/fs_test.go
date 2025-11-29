@@ -48,10 +48,15 @@ func TestFSTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadTool failed: %v", err)
 	}
-	// ReadTool adds line numbers
-	expectedRead := "     1\tHello, World!\n     2\tLine 2\n"
-	if output != expectedRead {
-		t.Errorf("ReadTool output mismatch.\nExpected:\n%q\nGot:\n%q", expectedRead, output)
+	// ReadTool adds line numbers and summary
+	if !strings.Contains(output, "     1\tHello, World!") {
+		t.Errorf("ReadTool output missing line 1. Got:\n%s", output)
+	}
+	if !strings.Contains(output, "     2\tLine 2") {
+		t.Errorf("ReadTool output missing line 2. Got:\n%s", output)
+	}
+	if !strings.Contains(output, "[Total: 2 lines in file]") {
+		t.Errorf("ReadTool output missing line count. Got:\n%s", output)
 	}
 
 	// 3. Test EditTool

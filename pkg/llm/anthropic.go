@@ -116,9 +116,17 @@ func (c *AnthropicClient) GenerateStream(ctx context.Context, messages []Message
 	apiMessages := make([]apiMessage, 0, len(messages))
     var systemPrompt string
 
-	for _, msg := range messages {
+	for i, msg := range messages {
         if msg.Role == RoleSystem {
             systemPrompt = msg.Content
+            continue
+        }
+
+        // Skip empty messages - Anthropic API requires non-empty content for all messages
+        // except the optional final assistant message (used for prefill)
+        isLastMessage := i == len(messages)-1
+        isEmpty := msg.Content == "" && len(msg.ToolCalls) == 0 && len(msg.Images) == 0 && msg.ToolResult == nil
+        if isEmpty && !(isLastMessage && msg.Role == RoleAssistant) {
             continue
         }
 
@@ -175,7 +183,13 @@ func (c *AnthropicClient) GenerateStream(ctx context.Context, messages []Message
                         },
                     })
                 }
-                apiMsg.Content = blocks
+                // If all images failed to load and no text, fall back to string
+                // to avoid "Input should be a valid list" API error.
+                if len(blocks) == 0 {
+                    apiMsg.Content = msg.Content
+                } else {
+                    apiMsg.Content = blocks
+                }
             } else {
                 apiMsg.Content = msg.Content
             }
@@ -195,7 +209,14 @@ func (c *AnthropicClient) GenerateStream(ctx context.Context, messages []Message
                      Input: tc.Args,
                  })
              }
-             apiMsg.Content = blocks
+             // Anthropic API requires content to be a non-empty list when using blocks.
+             // If both Content and ToolCalls are empty, fall back to empty string
+             // to avoid "Input should be a valid list" API error.
+             if len(blocks) == 0 {
+                 apiMsg.Content = ""
+             } else {
+                 apiMsg.Content = blocks
+             }
         } else if msg.Role == RoleTool {
             apiMsg.Role = "user"
             blocks := []apiContentBlock{

@@ -18,7 +18,9 @@ func (t *ReadTool) Definition() ToolDefinition {
 		Description: `Reads a file from the local filesystem.
 - Must use absolute paths, not relative
 - Reads up to 2000 lines by default from beginning
-- Can specify offset and limit for long files
+- Use offset to skip lines from the start
+- Use limit to control how many lines to read
+- Use tail to read from the END of the file (useful for logs/large files)
 - Lines longer than 2000 chars are truncated
 - Can read images (PNG, JPG), PDFs, and Jupyter notebooks
 - Cannot read directories (use ls via Bash for that)
@@ -29,8 +31,20 @@ func (t *ReadTool) Definition() ToolDefinition {
 			"type": "object",
 			"properties": map[string]interface{}{
 				"file_path": map[string]interface{}{
-					"type": "string",
-                    "description": "The absolute path to the file to read",
+					"type":        "string",
+					"description": "The absolute path to the file to read",
+				},
+				"offset": map[string]interface{}{
+					"type":        "integer",
+					"description": "Number of lines to skip from the start (default: 0)",
+				},
+				"limit": map[string]interface{}{
+					"type":        "integer",
+					"description": "Maximum number of lines to read (default: 2000)",
+				},
+				"tail": map[string]interface{}{
+					"type":        "integer",
+					"description": "Read the last N lines of the file (overrides offset/limit). Useful for logs and large files.",
 				},
 			},
 			"required": []string{"file_path"},
@@ -44,27 +58,80 @@ func (t *ReadTool) Execute(ctx context.Context, args map[string]interface{}) (st
 		return "", fmt.Errorf("file_path required")
 	}
 
+	// Parse optional parameters
+	offset := 0
+	if v, ok := args["offset"].(float64); ok {
+		offset = int(v)
+	}
+	limit := 2000
+	if v, ok := args["limit"].(float64); ok {
+		limit = int(v)
+	}
+	tail := 0
+	if v, ok := args["tail"].(float64); ok {
+		tail = int(v)
+	}
+
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 
-	// Format with line numbers
 	lines := strings.Split(string(content), "\n")
-    // Limit to 2000 lines
-    truncated := false
-    if len(lines) > 2000 {
-        lines = lines[:2000]
-        truncated = true
-    }
+	totalLines := len(lines)
+
+	var selectedLines []string
+	var startLineNum int
+	truncatedStart := false
+	truncatedEnd := false
+
+	if tail > 0 {
+		// Read from end of file
+		if tail >= totalLines {
+			selectedLines = lines
+			startLineNum = 1
+		} else {
+			startLineNum = totalLines - tail + 1
+			selectedLines = lines[totalLines-tail:]
+			truncatedStart = true
+		}
+	} else {
+		// Read from beginning with offset/limit
+		if offset >= totalLines {
+			return fmt.Sprintf("File has %d lines, offset %d is beyond end of file", totalLines, offset), nil
+		}
+		startLineNum = offset + 1
+		endIdx := offset + limit
+		if endIdx > totalLines {
+			endIdx = totalLines
+		} else {
+			truncatedEnd = true
+		}
+		if offset > 0 {
+			truncatedStart = true
+		}
+		selectedLines = lines[offset:endIdx]
+	}
 
 	var sb strings.Builder
-	for i, line := range lines {
-		sb.WriteString(fmt.Sprintf("%6d\t%s\n", i+1, line))
+	if truncatedStart {
+		sb.WriteString(fmt.Sprintf("...[Skipped %d lines]...\n", startLineNum-1))
 	}
-    if truncated {
-        sb.WriteString("...[File Truncated at 2000 lines]...\n")
-    }
+	for i, line := range selectedLines {
+		lineNum := startLineNum + i
+		// Truncate very long lines
+		if len(line) > 2000 {
+			line = line[:2000] + "...[line truncated]"
+		}
+		sb.WriteString(fmt.Sprintf("%6d\t%s\n", lineNum, line))
+	}
+	if truncatedEnd {
+		remaining := totalLines - (startLineNum - 1 + len(selectedLines))
+		if remaining > 0 {
+			sb.WriteString(fmt.Sprintf("...[%d more lines, use offset=%d to continue]...\n", remaining, startLineNum-1+len(selectedLines)))
+		}
+	}
+	sb.WriteString(fmt.Sprintf("\n[Total: %d lines in file]\n", totalLines))
 
 	return sb.String(), nil
 }
