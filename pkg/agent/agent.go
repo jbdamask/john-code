@@ -171,6 +171,12 @@ func (a *Agent) switchModel(modelID string) error {
 
 	a.client = a.createClientForModel(modelID)
 	a.currentModel = modelID
+
+	// Update session manager if present
+	if a.session != nil {
+		a.session.SetModel(model.APIModel)
+	}
+
 	a.ui.Print(fmt.Sprintf("Switched to %s", model.Name))
 	return nil
 }

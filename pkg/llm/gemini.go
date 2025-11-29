@@ -250,6 +250,17 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Debug: Log request to file for diagnostics
+	if os.Getenv("JOHN_DEBUG") != "" {
+		debugFile, _ := os.OpenFile("/tmp/john_gemini_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if debugFile != nil {
+			debugFile.WriteString(fmt.Sprintf("\n=== REQUEST %s ===\n", c.model))
+			debugFile.WriteString(string(jsonData))
+			debugFile.WriteString("\n")
+			debugFile.Close()
+		}
+	}
+
 	// Gemini uses different endpoint for streaming
 	endpoint := fmt.Sprintf("%s/%s:streamGenerateContent?key=%s&alt=sse",
 		GeminiAPIBase, c.model, c.apiKey)
@@ -269,6 +280,16 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
+		// Debug: Log error response
+		if os.Getenv("JOHN_DEBUG") != "" {
+			debugFile, _ := os.OpenFile("/tmp/john_gemini_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if debugFile != nil {
+				debugFile.WriteString(fmt.Sprintf("\n=== ERROR RESPONSE %d ===\n", resp.StatusCode))
+				debugFile.WriteString(string(bodyBytes))
+				debugFile.WriteString("\n")
+				debugFile.Close()
+			}
+		}
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(bodyBytes))
 	}
 
@@ -297,6 +318,15 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "" {
 			continue
+		}
+
+		// Debug: Log raw stream data
+		if os.Getenv("JOHN_DEBUG") != "" {
+			debugFile, _ := os.OpenFile("/tmp/john_gemini_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if debugFile != nil {
+				debugFile.WriteString(fmt.Sprintf("STREAM: %s\n", data))
+				debugFile.Close()
+			}
 		}
 
 		var chunk geminiStreamChunk
