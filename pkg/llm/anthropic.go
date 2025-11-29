@@ -116,9 +116,17 @@ func (c *AnthropicClient) GenerateStream(ctx context.Context, messages []Message
 	apiMessages := make([]apiMessage, 0, len(messages))
     var systemPrompt string
 
-	for _, msg := range messages {
+	for i, msg := range messages {
         if msg.Role == RoleSystem {
             systemPrompt = msg.Content
+            continue
+        }
+
+        // Skip empty messages - Anthropic API requires non-empty content for all messages
+        // except the optional final assistant message (used for prefill)
+        isLastMessage := i == len(messages)-1
+        isEmpty := msg.Content == "" && len(msg.ToolCalls) == 0 && len(msg.Images) == 0 && msg.ToolResult == nil
+        if isEmpty && !(isLastMessage && msg.Role == RoleAssistant) {
             continue
         }
 
