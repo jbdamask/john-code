@@ -89,7 +89,9 @@ type geminiResponse struct {
 }
 
 type geminiCandidate struct {
-	Content geminiContent `json:"content"`
+	Content       geminiContent `json:"content"`
+	FinishReason  string        `json:"finishReason,omitempty"`
+	FinishMessage string        `json:"finishMessage,omitempty"`
 }
 
 // Streaming structures
@@ -335,6 +337,18 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 		}
 
 		for _, candidate := range chunk.Candidates {
+			// Check for malformed function call error
+			if candidate.FinishReason == "MALFORMED_FUNCTION_CALL" {
+				// Gemini generated code-style function call instead of JSON
+				// Return an error message as content so the agent can try again
+				errMsg := "I encountered an issue with tool formatting. Let me try a different approach.\n"
+				if outputChan != nil {
+					outputChan <- errMsg
+				}
+				finalMsg.Content = errMsg
+				return finalMsg, nil
+			}
+
 			for _, part := range candidate.Content.Parts {
 				if part.Text != "" {
 					finalMsg.Content += part.Text
