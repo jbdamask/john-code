@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-const DefaultOpenAIEndpoint = "https://api.openai.com/v1/chat/completions"
+const DefaultOpenAIEndpoint = "https://api.openai.com/v1/responses"
 
 type OpenAIClient struct {
 	apiKey   string
@@ -25,7 +25,7 @@ type OpenAIClient struct {
 
 func NewOpenAIClient(apiKey string, model string) *OpenAIClient {
 	if model == "" {
-		model = "gpt-5"
+		model = "gpt-4o"
 	}
 
 	return &OpenAIClient{
@@ -36,26 +36,30 @@ func NewOpenAIClient(apiKey string, model string) *OpenAIClient {
 	}
 }
 
-// OpenAI API structures
+// OpenAI Responses API structures
 type openAIRequest struct {
-	Model       string            `json:"model"`
-	Messages    []openAIMessage   `json:"messages"`
-	Tools       []openAITool      `json:"tools,omitempty"`
-	MaxTokens   int               `json:"max_tokens,omitempty"`
-	Stream      bool              `json:"stream,omitempty"`
+	Model           string              `json:"model"`
+	Input           []openAIInputItem   `json:"input"`
+	Tools           []openAITool        `json:"tools,omitempty"`
+	MaxOutputTokens int                 `json:"max_output_tokens,omitempty"`
+	Stream          bool                `json:"stream,omitempty"`
+	Instructions    string              `json:"instructions,omitempty"`
 }
 
-type openAIMessage struct {
-	Role       string             `json:"role"`
-	Content    interface{}        `json:"content"` // string or []openAIContentPart
-	ToolCalls  []openAIToolCall   `json:"tool_calls,omitempty"`
-	ToolCallID string             `json:"tool_call_id,omitempty"`
+type openAIInputItem struct {
+	Type      string      `json:"type,omitempty"`
+	Role      string      `json:"role,omitempty"`
+	Content   interface{} `json:"content,omitempty"`
+	CallID    string      `json:"call_id,omitempty"`
+	Output    string      `json:"output,omitempty"`
+	Name      string      `json:"name,omitempty"`
+	Arguments string      `json:"arguments,omitempty"`
 }
 
 type openAIContentPart struct {
-	Type     string            `json:"type"`
-	Text     string            `json:"text,omitempty"`
-	ImageURL *openAIImageURL   `json:"image_url,omitempty"`
+	Type     string          `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	ImageURL *openAIImageURL `json:"image_url,omitempty"`
 }
 
 type openAIImageURL struct {
@@ -63,42 +67,40 @@ type openAIImageURL struct {
 }
 
 type openAITool struct {
-	Type     string           `json:"type"`
-	Function openAIFunction   `json:"function"`
+	Type        string         `json:"type"`
+	Name        string         `json:"name,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Parameters  interface{}    `json:"parameters,omitempty"`
 }
 
-type openAIFunction struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	Parameters  interface{} `json:"parameters"`
+// Streaming event structures for Responses API
+type openAIStreamEvent struct {
+	Type        string `json:"type"`
+	ItemID      string `json:"item_id,omitempty"`
+	OutputIndex int    `json:"output_index,omitempty"`
+	Delta       string `json:"delta,omitempty"`
+	Name        string `json:"name,omitempty"`
+	CallID      string `json:"call_id,omitempty"`
+	Arguments   string `json:"arguments,omitempty"`
 }
 
-type openAIToolCall struct {
-	ID       string             `json:"id"`
-	Type     string             `json:"type"`
-	Function openAIFunctionCall `json:"function"`
+// Response object structure
+type openAIResponse struct {
+	ID     string            `json:"id"`
+	Output []openAIOutputItem `json:"output"`
+	Status string            `json:"status"`
 }
 
-type openAIFunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
-
-// Streaming structures
-type openAIStreamChunk struct {
-	ID      string              `json:"id"`
-	Choices []openAIStreamChoice `json:"choices"`
-}
-
-type openAIStreamChoice struct {
-	Delta        openAIStreamDelta `json:"delta"`
-	FinishReason string            `json:"finish_reason"`
-}
-
-type openAIStreamDelta struct {
-	Role      string           `json:"role,omitempty"`
-	Content   string           `json:"content,omitempty"`
-	ToolCalls []openAIToolCall `json:"tool_calls,omitempty"`
+type openAIOutputItem struct {
+	Type      string `json:"type"`
+	ID        string `json:"id,omitempty"`
+	CallID    string `json:"call_id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+	Content   []struct {
+		Type string `json:"type"`
+		Text string `json:"text,omitempty"`
+	} `json:"content,omitempty"`
 }
 
 func (c *OpenAIClient) Generate(ctx context.Context, messages []Message, tools []interface{}) (*Message, error) {
@@ -106,23 +108,24 @@ func (c *OpenAIClient) Generate(ctx context.Context, messages []Message, tools [
 }
 
 func (c *OpenAIClient) GenerateStream(ctx context.Context, messages []Message, tools []interface{}, outputChan chan<- string) (*Message, error) {
-	apiMessages := make([]openAIMessage, 0, len(messages))
+	inputItems := make([]openAIInputItem, 0, len(messages))
+	var systemInstruction string
 
 	for _, msg := range messages {
-		apiMsg := openAIMessage{
-			Role: string(msg.Role),
-		}
-
 		switch msg.Role {
 		case RoleSystem:
-			apiMsg.Content = msg.Content
+			systemInstruction = msg.Content
 
 		case RoleUser:
+			item := openAIInputItem{
+				Role: "user",
+			}
+
 			if len(msg.Images) > 0 {
 				var parts []openAIContentPart
 				if msg.Content != "" {
 					parts = append(parts, openAIContentPart{
-						Type: "text",
+						Type: "input_text",
 						Text: msg.Content,
 					})
 				}
@@ -147,40 +150,46 @@ func (c *OpenAIClient) GenerateStream(ctx context.Context, messages []Message, t
 					}
 					encoded := base64.StdEncoding.EncodeToString(data)
 					parts = append(parts, openAIContentPart{
-						Type: "image_url",
+						Type: "input_image",
 						ImageURL: &openAIImageURL{
 							URL: fmt.Sprintf("data:%s;base64,%s", mediaType, encoded),
 						},
 					})
 				}
-				apiMsg.Content = parts
+				item.Content = parts
 			} else {
-				apiMsg.Content = msg.Content
+				item.Content = msg.Content
 			}
+			inputItems = append(inputItems, item)
 
 		case RoleAssistant:
-			apiMsg.Content = msg.Content
+			// For assistant messages with tool calls, we need to include the function_call items
 			if len(msg.ToolCalls) > 0 {
 				for _, tc := range msg.ToolCalls {
 					argsJSON, _ := json.Marshal(tc.Args)
-					apiMsg.ToolCalls = append(apiMsg.ToolCalls, openAIToolCall{
-						ID:   tc.ID,
-						Type: "function",
-						Function: openAIFunctionCall{
-							Name:      tc.Name,
-							Arguments: string(argsJSON),
-						},
+					inputItems = append(inputItems, openAIInputItem{
+						Type:      "function_call",
+						CallID:    tc.ID,
+						Name:      tc.Name,
+						Arguments: string(argsJSON),
 					})
 				}
+			} else if msg.Content != "" {
+				// Regular assistant text message
+				inputItems = append(inputItems, openAIInputItem{
+					Role:    "assistant",
+					Content: msg.Content,
+				})
 			}
 
 		case RoleTool:
-			apiMsg.Role = "tool"
-			apiMsg.Content = msg.ToolResult.Content
-			apiMsg.ToolCallID = msg.ToolResult.ToolCallID
+			// Tool results use function_call_output type
+			inputItems = append(inputItems, openAIInputItem{
+				Type:   "function_call_output",
+				CallID: msg.ToolResult.ToolCallID,
+				Output: msg.ToolResult.Content,
+			})
 		}
-
-		apiMessages = append(apiMessages, apiMsg)
 	}
 
 	// Convert tools to OpenAI format
@@ -189,14 +198,12 @@ func (c *OpenAIClient) GenerateStream(ctx context.Context, messages []Message, t
 		var name, desc string
 		var schema interface{}
 
-		// Handle both ToolDefinition struct and map[string]interface{}
 		switch tool := t.(type) {
 		case map[string]interface{}:
 			name, _ = tool["name"].(string)
 			desc, _ = tool["description"].(string)
 			schema = tool["input_schema"]
 		default:
-			// Try to extract via JSON marshaling (handles ToolDefinition)
 			data, err := json.Marshal(t)
 			if err != nil {
 				continue
@@ -212,27 +219,37 @@ func (c *OpenAIClient) GenerateStream(ctx context.Context, messages []Message, t
 
 		if name != "" {
 			openAITools = append(openAITools, openAITool{
-				Type: "function",
-				Function: openAIFunction{
-					Name:        name,
-					Description: desc,
-					Parameters:  schema,
-				},
+				Type:        "function",
+				Name:        name,
+				Description: desc,
+				Parameters:  schema,
 			})
 		}
 	}
 
 	reqBody := openAIRequest{
-		Model:     c.model,
-		Messages:  apiMessages,
-		Tools:     openAITools,
-		MaxTokens: 8192,
-		Stream:    true,
+		Model:           c.model,
+		Input:           inputItems,
+		Tools:           openAITools,
+		MaxOutputTokens: 16384,
+		Stream:          true,
+		Instructions:    systemInstruction,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Debug logging
+	if os.Getenv("JOHN_DEBUG") != "" {
+		debugFile, _ := os.OpenFile("/tmp/john_openai_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if debugFile != nil {
+			debugFile.WriteString(fmt.Sprintf("\n=== REQUEST %s ===\n", c.model))
+			debugFile.WriteString(string(jsonData))
+			debugFile.WriteString("\n")
+			debugFile.Close()
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, bytes.NewBuffer(jsonData))
@@ -251,6 +268,15 @@ func (c *OpenAIClient) GenerateStream(ctx context.Context, messages []Message, t
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
+		if os.Getenv("JOHN_DEBUG") != "" {
+			debugFile, _ := os.OpenFile("/tmp/john_openai_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if debugFile != nil {
+				debugFile.WriteString(fmt.Sprintf("\n=== ERROR %d ===\n", resp.StatusCode))
+				debugFile.WriteString(string(bodyBytes))
+				debugFile.WriteString("\n")
+				debugFile.Close()
+			}
+		}
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(bodyBytes))
 	}
 
@@ -259,13 +285,13 @@ func (c *OpenAIClient) GenerateStream(ctx context.Context, messages []Message, t
 		ToolCalls: []ToolCall{},
 	}
 
-	// Track tool calls being built
-	type toolBuilder struct {
-		ID         string
+	// Track function calls being built
+	type funcCallBuilder struct {
+		CallID     string
 		Name       string
 		ArgsBuffer string
 	}
-	toolBuilders := make(map[int]*toolBuilder)
+	funcCallBuilders := make(map[string]*funcCallBuilder)
 
 	reader := bufio.NewReader(resp.Body)
 	for {
@@ -287,51 +313,76 @@ func (c *OpenAIClient) GenerateStream(ctx context.Context, messages []Message, t
 			break
 		}
 
-		var chunk openAIStreamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		// Debug log stream events
+		if os.Getenv("JOHN_DEBUG") != "" {
+			debugFile, _ := os.OpenFile("/tmp/john_openai_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if debugFile != nil {
+				debugFile.WriteString(fmt.Sprintf("STREAM: %s\n", data))
+				debugFile.Close()
+			}
+		}
+
+		var event openAIStreamEvent
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
 			continue
 		}
 
-		for _, choice := range chunk.Choices {
-			delta := choice.Delta
-
-			// Text content
-			if delta.Content != "" {
-				finalMsg.Content += delta.Content
+		switch event.Type {
+		case "response.output_text.delta":
+			// Text content delta
+			if event.Delta != "" {
+				finalMsg.Content += event.Delta
 				if outputChan != nil {
-					outputChan <- delta.Content
+					outputChan <- event.Delta
 				}
 			}
 
-			// Tool calls
-			for i, tc := range delta.ToolCalls {
-				if _, exists := toolBuilders[i]; !exists {
-					toolBuilders[i] = &toolBuilder{}
+		case "response.function_call_arguments.delta":
+			// Function call arguments streaming
+			if event.CallID != "" {
+				if _, exists := funcCallBuilders[event.CallID]; !exists {
+					funcCallBuilders[event.CallID] = &funcCallBuilder{
+						CallID: event.CallID,
+					}
 				}
-				tb := toolBuilders[i]
+				funcCallBuilders[event.CallID].ArgsBuffer += event.Delta
+			}
 
-				if tc.ID != "" {
-					tb.ID = tc.ID
-				}
-				if tc.Function.Name != "" {
-					tb.Name = tc.Function.Name
-				}
-				if tc.Function.Arguments != "" {
-					tb.ArgsBuffer += tc.Function.Arguments
+		case "response.function_call_arguments.done":
+			// Function call complete
+			if event.CallID != "" {
+				if builder, exists := funcCallBuilders[event.CallID]; exists {
+					builder.Name = event.Name
+					if event.Arguments != "" {
+						builder.ArgsBuffer = event.Arguments
+					}
+				} else {
+					funcCallBuilders[event.CallID] = &funcCallBuilder{
+						CallID:     event.CallID,
+						Name:       event.Name,
+						ArgsBuffer: event.Arguments,
+					}
 				}
 			}
+
+		case "response.output_item.added":
+			// New output item - might be a function call
+			// The name comes in this event for function calls
+
+		case "response.completed", "response.done":
+			// Response complete - finalize
 		}
 	}
 
-	// Finalize tool calls
-	for _, tb := range toolBuilders {
+	// Finalize function calls
+	for _, builder := range funcCallBuilders {
 		var args map[string]interface{}
-		if err := json.Unmarshal([]byte(tb.ArgsBuffer), &args); err != nil {
+		if err := json.Unmarshal([]byte(builder.ArgsBuffer), &args); err != nil {
 			args = make(map[string]interface{})
 		}
 		finalMsg.ToolCalls = append(finalMsg.ToolCalls, ToolCall{
-			ID:   tb.ID,
-			Name: tb.Name,
+			ID:   builder.CallID,
+			Name: builder.Name,
 			Args: args,
 		})
 	}
