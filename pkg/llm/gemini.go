@@ -221,10 +221,12 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 		}
 
 		if name != "" {
+			// Sanitize schema for Gemini compatibility
+			sanitizedSchema := sanitizeSchemaForGemini(schema)
 			funcDecls = append(funcDecls, geminiFunctionDeclaration{
 				Name:        name,
 				Description: desc,
-				Parameters:  schema,
+				Parameters:  sanitizedSchema,
 			})
 		}
 	}
@@ -324,4 +326,85 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 	}
 
 	return finalMsg, nil
+}
+
+// sanitizeSchemaForGemini removes JSON Schema fields that Gemini doesn't support.
+// Gemini uses a subset of OpenAPI schema and rejects standard JSON Schema fields
+// like $schema, additionalProperties, etc.
+func sanitizeSchemaForGemini(schema interface{}) interface{} {
+	if schema == nil {
+		return nil
+	}
+
+	schemaMap, ok := schema.(map[string]interface{})
+	if !ok {
+		return schema
+	}
+
+	// Fields to remove (not supported by Gemini's OpenAPI subset)
+	unsupportedFields := []string{
+		"$schema",
+		"additionalProperties",
+		"$id",
+		"$ref",
+		"$defs",
+		"definitions",
+		"default",
+		"examples",
+		"const",
+		"contentMediaType",
+		"contentEncoding",
+		"if",
+		"then",
+		"else",
+		"allOf",
+		"anyOf",
+		"oneOf",
+		"not",
+		"patternProperties",
+		"propertyNames",
+		"unevaluatedProperties",
+		"unevaluatedItems",
+		"dependentSchemas",
+		"dependentRequired",
+		"minContains",
+		"maxContains",
+		"contains",
+	}
+
+	result := make(map[string]interface{})
+	for key, value := range schemaMap {
+		// Skip unsupported fields
+		skip := false
+		for _, unsupported := range unsupportedFields {
+			if key == unsupported {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
+		// Recursively sanitize nested objects
+		switch v := value.(type) {
+		case map[string]interface{}:
+			result[key] = sanitizeSchemaForGemini(v)
+		case []interface{}:
+			// Handle arrays (e.g., items in array schemas, or allOf/anyOf arrays)
+			sanitized := make([]interface{}, len(v))
+			for i, item := range v {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					sanitized[i] = sanitizeSchemaForGemini(itemMap)
+				} else {
+					sanitized[i] = item
+				}
+			}
+			result[key] = sanitized
+		default:
+			result[key] = value
+		}
+	}
+
+	return result
 }

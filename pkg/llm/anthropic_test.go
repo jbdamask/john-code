@@ -17,7 +17,7 @@ func TestNewAnthropicClientEndpoint(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		client := NewAnthropicClient("dummy", tt.baseURL)
+		client := NewAnthropicClient("dummy", tt.baseURL, "")
 		if client.endpoint != tt.expected {
 			t.Errorf("NewAnthropicClient(%q).endpoint = %q; want %q", tt.baseURL, client.endpoint, tt.expected)
 		}
