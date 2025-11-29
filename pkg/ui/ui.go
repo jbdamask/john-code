@@ -179,15 +179,12 @@ func (m streamModel) View() string {
 }
 
 func (u *UI) DisplayStream(outputChan <-chan string) {
-	m := streamModel{
-		sub:     outputChan,
-		showing: true, // Default to showing
+	// Simple streaming: just print tokens as they arrive
+	// This allows natural terminal scrolling and is more responsive
+	for token := range outputChan {
+		fmt.Print(token)
 	}
-	p := tea.NewProgram(m)
-	_, err := p.Run()
-	if err != nil {
-		fmt.Printf("Error in stream display: %v\n", err)
-	}
+	fmt.Println() // Newline at end
 }
 
 // Command Picker for slash commands
@@ -291,6 +288,135 @@ func (u *UI) PickCommand(commands []CommandInfo) string {
 	}
 
 	if model, ok := m.(commandPickerModel); ok {
+		if model.canceled {
+			return ""
+		}
+		return model.selected
+	}
+	return ""
+}
+
+// Model Picker for /model command
+
+// ModelItem represents a model in the picker list
+type ModelItem struct {
+	id          string
+	name        string
+	provider    string
+	description string
+	isCurrent   bool
+}
+
+func (i ModelItem) Title() string {
+	indicator := "  "
+	if i.isCurrent {
+		indicator = "✓ "
+	}
+	return indicator + i.name
+}
+func (i ModelItem) Description() string {
+	return fmt.Sprintf("[%s] %s", i.provider, i.description)
+}
+func (i ModelItem) FilterValue() string { return i.name + " " + i.provider }
+
+type modelPickerModel struct {
+	list     list.Model
+	selected string
+	canceled bool
+}
+
+func newModelPickerModel(models []ModelItem) modelPickerModel {
+	items := make([]list.Item, len(models))
+	for i, m := range models {
+		items[i] = m
+	}
+
+	delegate := list.NewDefaultDelegate()
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color("62")).
+		Foreground(lipgloss.Color("170")).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.SelectedDesc = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color("62")).
+		Foreground(lipgloss.Color("240")).
+		Padding(0, 0, 0, 1)
+
+	l := list.New(items, delegate, 60, 14)
+	l.Title = "Select Model"
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(true)
+	l.Styles.Title = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("170")).
+		Bold(true).
+		Padding(0, 1)
+
+	return modelPickerModel{list: l}
+}
+
+func (m modelPickerModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m modelPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEnter:
+			if item, ok := m.list.SelectedItem().(ModelItem); ok {
+				m.selected = item.id
+			}
+			return m, tea.Quit
+		case tea.KeyCtrlC, tea.KeyEsc:
+			m.canceled = true
+			return m, tea.Quit
+		}
+	case tea.WindowSizeMsg:
+		m.list.SetWidth(msg.Width)
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+func (m modelPickerModel) View() string {
+	return m.list.View()
+}
+
+// ModelInfo holds model info for the picker
+type ModelInfo struct {
+	ID          string
+	Name        string
+	Provider    string
+	Description string
+	IsCurrent   bool
+}
+
+// PickModel displays a model picker and returns the selected model ID
+// Returns empty string if canceled
+func (u *UI) PickModel(models []ModelInfo) string {
+	items := make([]ModelItem, len(models))
+	for i, m := range models {
+		items[i] = ModelItem{
+			id:          m.ID,
+			name:        m.Name,
+			provider:    m.Provider,
+			description: m.Description,
+			isCurrent:   m.IsCurrent,
+		}
+	}
+
+	p := tea.NewProgram(newModelPickerModel(items))
+	m, err := p.Run()
+	if err != nil {
+		fmt.Printf("Error in model picker: %v\n", err)
+		return ""
+	}
+
+	if model, ok := m.(modelPickerModel); ok {
 		if model.canceled {
 			return ""
 		}

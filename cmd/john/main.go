@@ -178,7 +178,7 @@ func handleMCPList() {
 		return
 	}
 
-	fmt.Println("Configured MCP servers:\n")
+	fmt.Println("Configured MCP servers:")
 	for name, server := range config.MCPServers {
 		fmt.Printf("  %s\n", name)
 		fmt.Printf("    Command: %s\n", server.Command)

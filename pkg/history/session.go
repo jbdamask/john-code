@@ -30,10 +30,11 @@ type SessionEvent struct {
 }
 
 type SessionManager struct {
-	SessionID   string
-	CurrentUUID string
-	FilePath    string
-	CWD         string
+	SessionID    string
+	CurrentUUID  string
+	FilePath     string
+	CWD          string
+	CurrentModel string
 }
 
 func NewSessionManager(cwd string) (*SessionManager, error) {
@@ -61,11 +62,17 @@ func NewSessionManager(cwd string) (*SessionManager, error) {
 	filePath := filepath.Join(projectDir, fmt.Sprintf("%s.jsonl", sessionID))
 
 	return &SessionManager{
-		SessionID:   sessionID,
-		CurrentUUID: "", // Start with no parent
-		FilePath:    filePath,
-		CWD:         cwd,
+		SessionID:    sessionID,
+		CurrentUUID:  "", // Start with no parent
+		FilePath:     filePath,
+		CWD:          cwd,
+		CurrentModel: "claude-sonnet-4-5-20250929", // Default, can be updated
 	}, nil
+}
+
+// SetModel updates the current model for logging
+func (sm *SessionManager) SetModel(model string) {
+	sm.CurrentModel = model
 }
 
 func (sm *SessionManager) Append(role llm.Role, msg llm.Message) error {
@@ -157,7 +164,7 @@ func (sm *SessionManager) Append(role llm.Role, msg llm.Message) error {
 		messageObj = map[string]interface{}{
 			"role":    "assistant",
 			"content": content,
-            "model": "claude-sonnet-4-5-20250929", // TODO: Make dynamic
+			"model":   sm.CurrentModel,
 		}
 	} else if role == llm.RoleSystem {
         // We generally don't store system prompt as an event in the linked list in the same way?

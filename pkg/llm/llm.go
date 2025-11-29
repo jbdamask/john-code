@@ -18,8 +18,9 @@ type ToolCall struct {
 }
 
 type ToolResult struct {
-    ToolCallID string `json:"tool_use_id"`
-    Content    string `json:"content"`
+	ToolCallID string `json:"tool_use_id"`
+	ToolName   string `json:"tool_name"` // Needed for Gemini function responses
+	Content    string `json:"content"`
 }
 
 type Message struct {
