@@ -22,13 +22,13 @@ func TestSanitizeSchemaForGemini(t *testing.T) {
 			expected: "string",
 		},
 		{
-			name: "removes $schema field",
+			name: "removes $schema field and converts type to uppercase",
 			input: map[string]interface{}{
 				"$schema": "http://json-schema.org/draft-07/schema#",
 				"type":    "object",
 			},
 			expected: map[string]interface{}{
-				"type": "object",
+				"type": "OBJECT",
 			},
 		},
 		{
@@ -43,10 +43,10 @@ func TestSanitizeSchemaForGemini(t *testing.T) {
 				},
 			},
 			expected: map[string]interface{}{
-				"type": "object",
+				"type": "OBJECT",
 				"properties": map[string]interface{}{
 					"name": map[string]interface{}{
-						"type": "string",
+						"type": "STRING",
 					},
 				},
 			},
@@ -70,13 +70,13 @@ func TestSanitizeSchemaForGemini(t *testing.T) {
 				},
 			},
 			expected: map[string]interface{}{
-				"type": "object",
+				"type": "OBJECT",
 				"properties": map[string]interface{}{
 					"config": map[string]interface{}{
-						"type": "object",
+						"type": "OBJECT",
 						"properties": map[string]interface{}{
 							"key": map[string]interface{}{
-								"type": "string",
+								"type": "STRING",
 							},
 						},
 					},
@@ -93,14 +93,14 @@ func TestSanitizeSchemaForGemini(t *testing.T) {
 				},
 			},
 			expected: map[string]interface{}{
-				"type": "array",
+				"type": "ARRAY",
 				"items": map[string]interface{}{
-					"type": "object",
+					"type": "OBJECT",
 				},
 			},
 		},
 		{
-			name: "preserves supported fields",
+			name: "preserves supported fields and uppercases types",
 			input: map[string]interface{}{
 				"type":        "object",
 				"description": "A test schema",
@@ -118,15 +118,15 @@ func TestSanitizeSchemaForGemini(t *testing.T) {
 				"required": []interface{}{"name"},
 			},
 			expected: map[string]interface{}{
-				"type":        "object",
+				"type":        "OBJECT",
 				"description": "A test schema",
 				"properties": map[string]interface{}{
 					"name": map[string]interface{}{
-						"type":        "string",
+						"type":        "STRING",
 						"description": "The name",
 					},
 					"count": map[string]interface{}{
-						"type":    "integer",
+						"type":    "INTEGER",
 						"minimum": 0,
 						"maximum": 100,
 					},

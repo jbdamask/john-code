@@ -36,10 +36,19 @@ func NewGeminiClient(apiKey string, model string) *GeminiClient {
 
 // Gemini API structures
 type geminiRequest struct {
-	Contents         []geminiContent       `json:"contents"`
-	Tools            []geminiTool          `json:"tools,omitempty"`
-	SystemInstruction *geminiContent       `json:"systemInstruction,omitempty"`
-	GenerationConfig *geminiGenerationConfig `json:"generationConfig,omitempty"`
+	Contents          []geminiContent         `json:"contents"`
+	Tools             []geminiTool            `json:"tools,omitempty"`
+	ToolConfig        *geminiToolConfig       `json:"toolConfig,omitempty"`
+	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
+	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
+}
+
+type geminiToolConfig struct {
+	FunctionCallingConfig *geminiFunctionCallingConfig `json:"functionCallingConfig,omitempty"`
+}
+
+type geminiFunctionCallingConfig struct {
+	Mode string `json:"mode"` // AUTO, ANY, NONE, VALIDATED
 }
 
 type geminiContent struct {
@@ -247,6 +256,15 @@ func (c *GeminiClient) GenerateStream(ctx context.Context, messages []Message, t
 		},
 	}
 
+	// Add toolConfig if we have tools - use AUTO mode for flexibility
+	if len(geminiTools) > 0 {
+		reqBody.ToolConfig = &geminiToolConfig{
+			FunctionCallingConfig: &geminiFunctionCallingConfig{
+				Mode: "AUTO",
+			},
+		}
+	}
+
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -428,6 +446,14 @@ func sanitizeSchemaForGemini(schema interface{}) interface{} {
 		}
 		if skip {
 			continue
+		}
+
+		// Convert "type" values to uppercase (Gemini requires STRING, OBJECT, ARRAY, etc.)
+		if key == "type" {
+			if typeStr, ok := value.(string); ok {
+				result[key] = strings.ToUpper(typeStr)
+				continue
+			}
 		}
 
 		// Recursively sanitize nested objects
