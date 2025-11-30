@@ -1,7 +1,7 @@
 # John Code
 
 <p align="center">
-  <img src="john-code-v1.png" alt="John Code Logo" width="300"/>
+  <img src="john-code-v1.png" alt="John Code Logo" width="500"/>
 </p>
 
 An AI coding assistant CLI, reverse-engineered from Claude Code.
